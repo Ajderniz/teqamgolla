@@ -1,0 +1,33 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+		},
+		{
+			"path": "/home/axell/Programs/odin/core",
+		},
+		{
+			"path": "/home/axell/Programs/odin/vendor/raylib"
+		},
+	],
+	"build_systems":
+	[
+		{
+			"name": "teqamgolla",
+			"cmd": ["odin", "run", "."],
+			"file_regex": "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
+		}
+	],
+	"settings":
+	{
+		"auto_complete": false,
+		"LSP":
+		{
+			"odin":
+			{
+				"enabled": true,
+			},
+		},
+	},
+}
