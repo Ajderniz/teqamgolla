@@ -15,7 +15,7 @@
 	[
 		{
 			"name": "teqamgolla",
-			"cmd": ["odin", "run", "."],
+			"cmd": ["odin", "run", ".", "-debug"],
 			"file_regex": "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
 		}
 	],
