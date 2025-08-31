@@ -127,3 +127,31 @@ draw_message_box :: proc(p_rec: rl.Rectangle, p_msg: cstring)
 		0, 
 		rl.WHITE)
 }
+
+/*
+	Draws a short text within a box adjusted to its size.
+	
+	p_pos: X and Y position for the label.
+	p_lbl: text to be displayed within the box.
+*/
+draw_label :: proc(p_pos: rl.Vector2, p_lbl: cstring)
+{
+	// We use Raylib's handy 'MeasureTextEx' function to measure the text.
+	// The rest is history.
+	meas := rl.MeasureTextEx(font, p_lbl, f32(font.baseSize), 0)
+	rec := rl.Rectangle { 
+		p_pos.x,
+		p_pos.y,
+		meas.x + (padding * 2),
+		meas.y + (padding * 2) }
+
+	rl.DrawRectangleRec(rec, rl.BLACK)
+	rl.DrawRectangleLinesEx(rec, 1, rl.WHITE)
+	rl.DrawTextEx(
+		font, 
+		p_lbl, 
+		{ rec.x + padding, rec.y + padding }, 
+		cast(f32)font.baseSize, 
+		0, 
+		rl.WHITE)
+}
