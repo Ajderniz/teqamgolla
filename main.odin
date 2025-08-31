@@ -19,6 +19,13 @@ import "gui"
 NAT_SCR_W :: 640
 NAT_SCR_H :: NAT_SCR_W / 4 * 3
 
+is_rec_touching_mouse :: proc(rec: rl.Rectangle) -> bool
+{
+  mpos := rl.GetMousePosition()
+  return (rec.x <= mpos.x && mpos.x <= (rec.x + rec.width)) &&
+         (rec.y <= mpos.y && mpos.y <= (rec.y + rec.height))
+}
+
 main :: proc()
 {
   /* Logger boilerplate, copied from Karl Zylinski */
@@ -53,7 +60,7 @@ main :: proc()
   rl.InitWindow(NAT_SCR_W, NAT_SCR_H, "Teqamgolla")
   rl.SetWindowState( { .WINDOW_RESIZABLE } )
 
-  rl.SetTargetFPS(30)
+  rl.SetTargetFPS(60)
 
   font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
   gui.init(font, 12)
@@ -64,6 +71,11 @@ main :: proc()
 
   /* ============================= MAIN LOOP ================================ */
 
+  mbrec := rl.Rectangle{10,10,300,200}
+  resize := false
+  move := false
+  diff := rl.Vector2{0,0}
+
   for false == rl.WindowShouldClose()
   {
     scr_w := f32(rl.GetScreenWidth())
@@ -72,14 +84,58 @@ main :: proc()
     scaled_w := scr_h / 3 * 4
     scaled_x := (scr_w - scaled_w) / 2
 
-    mx := f32(rl.GetMouseX()) * (scaled_w / NAT_SCR_W)
-    my := f32(rl.GetMouseY()) * (scr_h / NAT_SCR_H)
+    if is_rec_touching_mouse(mbrec)
+    {
+      if !resize && rl.IsMouseButtonDown(.RIGHT) 
+      {
+        rl.SetMousePosition(
+          i32(mbrec.x + mbrec.width),
+          i32(mbrec.y + mbrec.height))
+        rl.SetMouseCursor(.RESIZE_NWSE)
+        resize = true
+    }
+      else if !move && rl.IsMouseButtonDown(.LEFT)
+      {
+        rl.SetMouseCursor(.RESIZE_ALL)
+        mpos := rl.GetMousePosition()
+        diff = { mpos.x - mbrec.x, mpos.y - mbrec.y }
+        move = true
+      }
+    }
+    if resize
+    {
+      if rl.IsMouseButtonDown(.RIGHT)
+      {
+        mpos := rl.GetMousePosition()
+        mbrec.width = mpos.x - mbrec.x if 24 <= mpos.x - mbrec.x else 24
+        mbrec.height = mpos.y - mbrec.y if 24 <= mpos.y - mbrec.y else 24
+      }
+      else
+      {
+        rl.SetMouseCursor(.DEFAULT)
+        resize = false
+      }
+    }
+    else if move
+    {
+      if rl.IsMouseButtonDown(.LEFT)
+      {
+        mpos := rl.GetMousePosition()
+        mbrec.x = mpos.x - diff.x//mbrec.x
+        mbrec.y = mpos.y - diff.y//mbrec.y
+      }
+      else
+      {
+        rl.SetMouseCursor(.DEFAULT)
+        move = false
+      }
+    }
 
     rl.BeginTextureMode(rtxr)
 
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
-      gui.draw_message_box({0,0, mx, my}, "In a village of La Mancha, the name of which I have no desire to call to mind, there lived not long since one of those gentlemen that keep a lance in the lance-rack, an old buckler, a lean hack, and a greyhound for coursing. An olla of rather more beef than mutton, a salad on most nights, scraps on Saturdays, lentils on Fridays, and a pigeon or so extra on Sundays, made away with three-quarters of his income. The rest of it went in a doublet of fine cloth and velvet breeches and shoes to match for holidays, while on week-days he made a brave figure in his best homespun. He had in his house a housekeeper past forty, a niece under twenty, and a lad for the field and market-place, who used to saddle the hack as well as handle the bill-hook. The age of this gentleman of ours was bordering on fifty; he was of a hardy habit, spare, gaunt-featured, a very early riser and a great sportsman. They will have it his surname was Quixada or Quesada (for here there is some difference of opinion among the authors who write on the subject), although from reasonable conjectures it seems plain that he was called Quexana. This, however, is of but little importance to our tale; it will be enough not to stray a hair's breadth from the truth in the telling of it.")
+      gui.draw_message_box(mbrec, "Beef noodles denim-space convenience store pistol Legba claymore mine rifle sign market knife silent Chiba A.I.. Footage face forwards shoes disposable man bicycle chrome. Wonton soup bridge camera 8-bit monofilament shrine semiotics grenade disposable ablative tank-traps cartel.")
       gui.draw_label({0, 0}, rl.TextFormat("%f", scale))
 
     rl.EndTextureMode()
