@@ -35,8 +35,6 @@ init :: proc(p_font: rl.Font, p_padding: f32)
 
 /*
 	Draws a message box, adjusting the text content to its size.
-	At this point in time it supports ASCII characters only. This is because
-	special characters use more spaces, causing indexing issues.
 
 	p_rec: dimensions to be used by the message box.
 	p_msg: text to be displayed within the box.
@@ -78,6 +76,11 @@ draw_message_box :: proc(p_rec: rl.Rectangle, p_msg: cstring)
 			limit := str.last_index_any(line, " \t\r\n")
 			ko: bool // This value is unused. 'substring_to' needs to assign it.
 			line, ko = str.substring_to(line, limit)
+
+			// We trim the line yet again, making up for any rune differences.
+			limit -= len(line) - str.rune_count(line)
+			line, ko = str.substring_to(line, limit)
+
 			// We update 'end' to reflect the real end index for this line.
 			end = start + limit
 		}
