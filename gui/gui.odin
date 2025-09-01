@@ -50,8 +50,8 @@ g_border_thickness: f32
 @(private)
 is_vector2_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
 {
-	return !(v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
-				  (v2.y < rec.y || (rec.y + rec.height) < v2.y)
+	return !((v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
+				  (v2.y < rec.y || (rec.y + rec.height) < v2.y))
 }
 
 // Updates the box's values to reflect input according to its 'drag_mode'.
@@ -66,28 +66,29 @@ update_box :: proc(box: ^Box, padding: f32)
 	{
 	// If the state is NONE, there is only potential to enable another mode.
 	case .NONE:
-		if is_vector2_within_rectangle(mpos, box.rec)
+		if !is_vector2_within_rectangle(mpos, box.rec)
 		{
-			// For each mode, we must check if the box can perform the action.
-			if .DRAGGABLE in box.flags && rl.IsMouseButtonPressed(.LEFT)
-			{
-				rl.SetMouseCursor(.RESIZE_ALL)
-				// Calculate the offset between the mouse and the box's origin.
-				box.mouse_offset = {
-					(mpos.x - box.rec.x),
-					(mpos.y - box.rec.y) }
-				box.drag_mode = .DRAG
-			}
-			else if .RESIZEABLE in box.flags &&
-					rl.IsMouseButtonPressed(.RIGHT)
-			{
-				// Place the cursor at the bottom-right corner of the box.
-				rl.SetMousePosition(
-					i32(box.rec.x + box.rec.width),
-					i32(box.rec.y + box.rec.height))
-				rl.SetMouseCursor(.RESIZE_NWSE)
-				box.drag_mode = .RESIZE
-			}
+			break
+		}
+		// For each mode, we must check if the box can perform the action.
+		if .DRAGGABLE in box.flags && rl.IsMouseButtonPressed(.LEFT)
+		{
+			rl.SetMouseCursor(.RESIZE_ALL)
+			// Calculate the offset between the mouse and the box's origin.
+			box.mouse_offset = {
+				(mpos.x - box.rec.x),
+				(mpos.y - box.rec.y) }
+			box.drag_mode = .DRAG
+		}
+		else if .RESIZEABLE in box.flags &&
+				rl.IsMouseButtonPressed(.RIGHT)
+		{
+			// Place the cursor at the bottom-right corner of the box.
+			rl.SetMousePosition(
+				i32(box.rec.x + box.rec.width),
+				i32(box.rec.y + box.rec.height))
+			rl.SetMouseCursor(.RESIZE_NWSE)
+			box.drag_mode = .RESIZE
 		}
 	// When dragging, we need to remember the mouse offset.
 	case .DRAG:
@@ -176,8 +177,12 @@ draw_text :: proc(
 	lines := [dynamic]string{}
 	defer delete(lines)
 
-	// We will iterate through every potential line.
-	// Before that, initialize the 'start' index to 0.
+	/*
+		- We will iterate through every potential line.
+		- Before that, initialize the 'start' index to 0.
+		- To prevent the text from rendering lines beyond the Y limit, we should
+			stop when the 'i' counter reaches it.
+	*/
 	start := 0
 	for i := 1 ; i <= max_c_height; i += 1
 	{
@@ -208,14 +213,12 @@ draw_text :: proc(
 			append(&lines, line)
 		}
 		/*
-			We'll want to break out of the loop if any of this is true:
-			- The indexes used for extracting the initial substring were out of
-			  bounds for the original message string. This is determined by the
-			  'ok' value, returned by the first 'substring' call in this loop.
-			- The current line, determined by the 'i' counter initialized by the
-			  for loop, has reached the maximum amount allowed by the boundaries
+			We'll want to break out of the loop if the indexes used for extracting the
+			initial substring were out of bounds for the original message string.
+			This is determined by the 'ok' value, returned by the first 'substring'
+			call in this loop.
 		*/
-		if !ok //|| max_c_height <= i
+		if !ok
 		{
 			break
 		}
