@@ -50,8 +50,8 @@ g_border_thickness: f32
 @(private)
 is_vector2_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
 {
-  return (rec.x <= v2.x && v2.x <= (rec.x + rec.width)) &&
-         (rec.y <= v2.y && v2.y <= (rec.y + rec.height))
+	return !(v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
+				  (v2.y < rec.y || (rec.y + rec.height) < v2.y)
 }
 
 // Updates the box's values to reflect input according to its 'drag_mode'.
