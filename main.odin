@@ -19,15 +19,6 @@ import "gui"
 NAT_SCR_W :: 640
 NAT_SCR_H :: NAT_SCR_W / 4 * 3
 
-/*
-is_rec_touching_mouse :: proc(rec: rl.Rectangle) -> bool
-{
-  mpos := rl.GetMousePosition()
-  return (rec.x <= mpos.x && mpos.x <= (rec.x + rec.width)) &&
-         (rec.y <= mpos.y && mpos.y <= (rec.y + rec.height))
-}
-*/
-
 main :: proc()
 {
   /* Logger boilerplate, copied from Karl Zylinski */
