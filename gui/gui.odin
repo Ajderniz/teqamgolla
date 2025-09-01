@@ -11,7 +11,17 @@ import str "core:strings"
 
 import rl "vendor:raylib"
 
-// Private values ==============================================================
+DBoxMode :: enum {
+	NONE,
+	DRAG,
+	RESIZE
+}
+
+DraggableBox :: struct {
+	rec: rl.Rectangle,
+	mode: DBoxMode,
+	mouse_offset: rl.Vector2
+}
 
 // This font will be used by default, and must be specified when invoking init.
 @(private)
@@ -20,6 +30,13 @@ font: rl.Font
 // This determines the pixel offset which separates the box and the text.
 @(private)
 padding: f32
+
+@(private)
+is_vector2_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
+{
+  return (rec.x <= v2.x && v2.x <= (rec.x + rec.width)) &&
+         (rec.y <= v2.y && v2.y <= (rec.y + rec.height))
+}
 
 /*
 	Initializer procedure. MUST be invoked before using the drawing procedures.
@@ -31,6 +48,66 @@ init :: proc(p_font: rl.Font, p_padding: f32)
 {
 	font = p_font
 	padding = p_padding
+}
+
+draw_draggable_box :: proc(p_dbox: ^DraggableBox)
+{
+	diff: rl.Vector2
+
+	mpos := rl.GetMousePosition()
+	back_to_normal := false
+
+	switch p_dbox.mode
+	{
+	case .NONE:
+		if is_vector2_within_rectangle(mpos, p_dbox.rec)
+		{
+			if rl.IsMouseButtonPressed(.LEFT)
+			{
+				rl.SetMouseCursor(.RESIZE_ALL)
+				p_dbox.mouse_offset = {
+					(mpos.x - p_dbox.rec.x),
+					(mpos.y - p_dbox.rec.y) }
+				p_dbox.mode = .DRAG
+			}
+			else if rl.IsMouseButtonPressed(.RIGHT)
+			{
+				rl.SetMousePosition(
+					i32(p_dbox.rec.x + p_dbox.rec.width),
+					i32(p_dbox.rec.y + p_dbox.rec.height))
+				rl.SetMouseCursor(.RESIZE_NWSE)
+				p_dbox.mode = .RESIZE
+			}
+		}
+	case .DRAG:
+		if rl.IsMouseButtonDown(.LEFT)
+		{
+			p_dbox.rec.x = mpos.x - p_dbox.mouse_offset.x
+			p_dbox.rec.y = mpos.y - p_dbox.mouse_offset.y
+		}
+		else
+		{
+			back_to_normal = true
+		}
+	case .RESIZE:
+		if rl.IsMouseButtonDown(.RIGHT)
+		{
+			double_padding := padding * 2
+			p_dbox.rec.width = mpos.x - p_dbox.rec.x if double_padding <= mpos.x - p_dbox.rec.x else double_padding
+			p_dbox.rec.height = mpos.y - p_dbox.rec.y if double_padding <= mpos.y - p_dbox.rec.y else double_padding
+		}
+		else
+		{
+			back_to_normal = true
+		}
+	}
+	if back_to_normal
+	{
+		rl.SetMouseCursor(.DEFAULT)
+		p_dbox.mode = .NONE
+	}
+
+	rl.DrawRectangleRec(p_dbox.rec, rl.BLACK)
 }
 
 /*
