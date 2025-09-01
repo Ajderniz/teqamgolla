@@ -124,8 +124,8 @@ update_box :: proc(box: ^Box, padding: f32)
 /*
 	Draws a simple box with an outline.
 
-	rec:			  box's dimensions
-	border_color:	  outline color
+	rec:			  			box's dimensions
+	border_color:	  	outline color
 	background_color: box body color
 	border_thickness: pixel size of the outline
 */
@@ -144,10 +144,10 @@ draw_box :: proc(
 /*
 	Draws a string of text, adjusting its lines to a rectangular boundary.
 
-	rec:		dimensions to be used by the message box.
-	txt:		text to be displayed within the box.
-	font:		font used to render the text.
-	padding:	pixel space between the content and the border.
+	rec:				dimensions to be used by the message box.
+	txt:				text to be displayed within the box.
+	font:				font used to render the text.
+	padding:		pixel space between the content and the border.
 	font_color: color used by the text.
 */
 @(private)
@@ -250,12 +250,12 @@ draw_text :: proc(
 /*
 	Initializer procedure. MUST be invoked before using the drawing procedures.
 
-	font: 		 	  font to be used by default
-	padding: 		  pixel offset between the box and the text
-	font_color:		  text color 
-	border_color:	  outine color
-	background_color: box body color
-	border_thickness: pixel size of the outline
+	font:							font to be used by default
+	padding:					pixel offset between the box and the text
+	font_color:				text color 
+	border_color:			outine color
+	background_color:	box body color
+	border_thickness:	pixel size of the outline
 */
 init :: proc(
 	font: rl.Font,
@@ -276,11 +276,11 @@ init :: proc(
 /*
 	Draws a box with text content adjusted to its size.
 
-	box:			  box structure to render and update
-	txt:			  text string to render within the box
-	font:			  font used to render the text
-	padding:		  space between the border and the text content
-	font_color:		  color for the font only
+	box:			  			box structure to render and update
+	txt:			  			text string to render within the box
+	font:			  			font used to render the text
+	padding:		  		space between the border and the text content
+	font_color:		  	color for the font only
 	border_color:     outline color
 	background_color: box body color
 	border_thickness: pixel size of the outline
@@ -307,8 +307,14 @@ draw_text_box :: proc(
 /*
 	Draws a short line of text within a box adjusted to its size.
 	
-	p_pos: X and Y position for the label.
-	p_lbl: text to be displayed within the box.
+	pos: 							X and Y position for the label
+	txt: 							text to be displayed within the box
+	font:							font to render the text with
+	padding:					pixel space between the border and the text content
+	font_color:				color to draw the text with
+	border_color:			color to draw the outline with
+	background_color: color to draw the box body with
+	border_thickness: pixel size of the outline
 */
 draw_label :: proc(
 	pos: rl.Vector2,
