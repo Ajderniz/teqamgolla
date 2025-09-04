@@ -88,7 +88,7 @@ main :: proc()
   {
     if rl.IsKeyPressed(.TAB)
     {
-      gui.bring_box_to_top(blist, len(blist) - 1)
+      gui.bring_box_to_top(blist, 1)
     }
 
     rl.BeginTextureMode(rtxr)
