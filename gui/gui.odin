@@ -11,25 +11,31 @@ import str "core:strings"
 
 import rl "vendor:raylib"
 
+import "core:fmt"
+
 // This is used to determine the state of a given 'Box'.
 BoxDragMode :: enum {
 	NONE,
 	DRAG,
-	RESIZE
+	RESIZE,
 }
 
 // This specifies the options for the 'BoxFlags' bit_set
 BoxFlag :: enum {
 	DRAGGABLE,
-	RESIZEABLE
+	RESIZABLE,
 }
 
 // This struct is used as the basis for all other composite GUI elements.
 Box :: struct {
-	rec: rl.Rectangle,		 
-	flags: bit_set[BoxFlag], // Drag & resize can be enabled or disabled here.
-	drag_mode: BoxDragMode,  
-	mouse_offset: rl.Vector2 // Distance between 0,0 and the mouse's postiion.
+	rec:          rl.Rectangle,
+	flags:        bit_set[BoxFlag], // Drag & resize can be enabled or disabled here.
+	drag_mode:    BoxDragMode,
+	mouse_offset: rl.Vector2, // Distance between 0,0 and the mouse's postiion.
+	content:      union {
+		string,
+		rl.Texture,
+	},
 }
 
 // These values will be used by default, and must be set when invoking 'init'.
@@ -48,77 +54,186 @@ g_border_thickness: f32
 
 // Returns true if the given 'v2' vector is within the 'rec' rectangle.
 @(private)
-is_vector2_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
-{
-	return !((v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
-				  (v2.y < rec.y || (rec.y + rec.height) < v2.y))
+is_vector2_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool {
+	return(
+		!((v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
+			(v2.y < rec.y || (rec.y + rec.height) < v2.y)) \
+	)
 }
+
+@(private)
+are_rectangles_overlapping :: proc(rec1: rl.Rectangle, rec2: rl.Rectangle) -> bool {
+	return(
+		!(((rec1.x + rec1.width) < rec2.x || (rec2.x + rec2.width) < rec1.x) ||
+			((rec1.y + rec1.height) < rec2.y || (rec2.y + rec2.height) < rec1.y)) \
+	)
+}
+
 
 // Updates the box's values to reflect input according to its 'drag_mode'.
 @(private)
-update_box :: proc(box: ^Box, padding: f32)
-{
+update_box :: proc(box: ^Box, padding: f32) {
 	// A few paths will require knowing the mouse's position.
 	mpos := rl.GetMousePosition()
 	reset := false // Whether the box's 'drag_mode' must be reset to 'NONE'
 
-	switch box.drag_mode
-	{
+	switch box.drag_mode {
 	// If the state is NONE, there is only potential to enable another mode.
 	case .NONE:
-		if !is_vector2_within_rectangle(mpos, box.rec)
-		{
+		if !is_vector2_within_rectangle(mpos, box.rec) {
 			break
 		}
 		// For each mode, we must check if the box can perform the action.
-		if .DRAGGABLE in box.flags && rl.IsMouseButtonPressed(.LEFT)
-		{
+		if .DRAGGABLE in box.flags && rl.IsMouseButtonPressed(.LEFT) {
 			rl.SetMouseCursor(.RESIZE_ALL)
 			// Calculate the offset between the mouse and the box's origin.
-			box.mouse_offset = {
-				(mpos.x - box.rec.x),
-				(mpos.y - box.rec.y) }
+			box.mouse_offset = {(mpos.x - box.rec.x), (mpos.y - box.rec.y)}
 			box.drag_mode = .DRAG
-		}
-		else if .RESIZEABLE in box.flags &&
-				rl.IsMouseButtonPressed(.RIGHT)
-		{
+		} else if .RESIZABLE in box.flags && rl.IsMouseButtonPressed(.RIGHT) {
 			// Place the cursor at the bottom-right corner of the box.
-			rl.SetMousePosition(
-				i32(box.rec.x + box.rec.width),
-				i32(box.rec.y + box.rec.height))
+			rl.SetMousePosition(i32(box.rec.x + box.rec.width), i32(box.rec.y + box.rec.height))
 			rl.SetMouseCursor(.RESIZE_NWSE)
 			box.drag_mode = .RESIZE
 		}
 	// When dragging, we need to remember the mouse offset.
 	case .DRAG:
-		if rl.IsMouseButtonDown(.LEFT)
-		{
+		if rl.IsMouseButtonDown(.LEFT) {
 			box.rec.x = mpos.x - box.mouse_offset.x
 			box.rec.y = mpos.y - box.mouse_offset.y
-		}
-		else
-		{
+		} else {
 			reset = true
 		}
 	// When resizing, restrict the minimum size the box can have.
 	case .RESIZE:
-		if rl.IsMouseButtonDown(.RIGHT)
-		{
+		if rl.IsMouseButtonDown(.RIGHT) {
 			double_padding := padding * 2
-			box.rec.width = mpos.x - box.rec.x if double_padding <= mpos.x - box.rec.x else double_padding
-			box.rec.height = mpos.y - box.rec.y if double_padding <= mpos.y - box.rec.y else double_padding
-		}
-		else
-		{
+			box.rec.width =
+				mpos.x - box.rec.x if double_padding <= mpos.x - box.rec.x else double_padding
+			box.rec.height =
+				mpos.y - box.rec.y if double_padding <= mpos.y - box.rec.y else double_padding
+		} else {
 			reset = true
 		}
 	}
 	// If any mode triggered the reset, we set the box's mode back to DEFAULT.
-	if reset
-	{
+	if reset {
 		rl.SetMouseCursor(.DEFAULT)
 		box.drag_mode = .NONE
+	}
+}
+
+update_box_list :: proc(box_list: []^Box)
+{
+	mouse_pos := rl.GetMousePosition()
+
+	new_top_index := -1
+	outer: for box, i in box_list
+	{
+		reset := false
+
+		mode: switch box.drag_mode
+		{
+		case .NONE:
+			if !is_vector2_within_rectangle(mouse_pos, box.rec) {
+				continue
+			}
+			for j in 0..<i
+			{
+				if is_vector2_within_rectangle(mouse_pos, box_list[j].rec)
+				{
+					continue outer
+				}
+			}
+
+			button_pressed := rl.MouseButton.BACK
+			if rl.IsMouseButtonPressed(.LEFT)
+			{
+				button_pressed = .LEFT
+			}
+			else if rl.IsMouseButtonPressed(.RIGHT)
+			{
+				button_pressed = .RIGHT
+			}
+
+			if .DRAGGABLE in box.flags && .LEFT == button_pressed
+			{
+				rl.SetMouseCursor(.RESIZE_ALL)
+				box.mouse_offset = {
+					(mouse_pos.x - box.rec.x), 
+					(mouse_pos.y - box.rec.y)
+				}
+				box.drag_mode = .DRAG
+			} 
+			else if .RESIZABLE in box.flags && .RIGHT == button_pressed
+			{
+				rl.SetMousePosition(
+					i32(box.rec.x + box.rec.width),
+					i32(box.rec.y + box.rec.height)
+					)
+				rl.SetMouseCursor(.RESIZE_NWSE)
+				box.drag_mode = .RESIZE
+			}
+			else if .LEFT == button_pressed || .RIGHT == button_pressed
+			{
+				break 
+			}
+			else
+			{
+				continue
+			}
+		case .DRAG:
+			if rl.IsMouseButtonDown(.LEFT)
+			{
+				box.rec.x = mouse_pos.x - box.mouse_offset.x
+				box.rec.y = mouse_pos.y - box.mouse_offset.y
+			}
+			else
+			{
+				reset = true
+			}
+		case .RESIZE:
+			if rl.IsMouseButtonDown(.RIGHT) {
+				double_padding := g_padding * 2
+				box.rec.width = mouse_pos.x - box.rec.x if double_padding <= mouse_pos.x - box.rec.x else double_padding
+				box.rec.height = mouse_pos.y - box.rec.y if double_padding <= mouse_pos.y - box.rec.y else double_padding
+			} else {
+				reset = true
+			}
+		}
+		if reset {
+			rl.SetMouseCursor(.DEFAULT)
+			box.drag_mode = .NONE
+			continue
+		}
+		new_top_index = i if i != 0 else -1
+		break
+	}
+	if 0 < new_top_index
+	{
+		tmp := box_list[new_top_index]
+		for k := new_top_index - 1; 0 <= k; k -= 1
+		{
+			box_list[k+1] = box_list[k]
+		}
+		box_list[0] = tmp
+	}
+}
+
+draw_box_list :: proc(box_list: []^Box)
+{
+	#reverse for box in box_list
+	{
+		draw_box(box.rec)
+		switch content in box.content
+		{
+		case string:
+			draw_text(box.rec, content, g_font, g_padding, g_font_color)
+		case rl.Texture:
+			rl.DrawTextureV(
+				content,
+				{ box.rec.x + g_padding, box.rec.y + g_padding},
+				rl.WHITE)
+		}
 	}
 }
 
@@ -135,8 +250,8 @@ draw_box :: proc(
 	rec: rl.Rectangle,
 	border_color := g_border_color,
 	background_color := g_background_color,
-	border_thickness := g_border_thickness)
-{
+	border_thickness := g_border_thickness,
+) {
 	rl.DrawRectangleRec(rec, background_color)
 	rl.DrawRectangleLinesEx(rec, border_thickness, border_color)
 }
@@ -154,12 +269,11 @@ draw_box :: proc(
 @(private)
 draw_text :: proc(
 	rec: rl.Rectangle,
-	txt: cstring,
+	txt: string,
 	font: rl.Font,
 	padding: f32,
-	font_color: rl.Color
-	)
-{
+	font_color: rl.Color,
+) {
 	/* 
 		First, we must calculate the maximum amount of characters that can
 		possibly fit within the message box. For both dimensions, we must
@@ -167,11 +281,8 @@ draw_text :: proc(
 		(taking into consideration the padding value at each side) by the
 		width or height of each glyph.
 	*/
-	max_c_width :=
-		int(math.trunc((rec.width - (padding * 2)) / font.recs[0].width))
-	max_c_height :=
-		int(math.trunc((rec.height - (padding * 2)) /
-						f32((font.baseSize + 2))))
+	max_c_width := int(math.trunc((rec.width - (padding * 2)) / font.recs[0].width))
+	max_c_height := int(math.trunc((rec.height - (padding * 2)) / f32((font.baseSize + 2))))
 
 	// The amount of lines is unpredictable, so we will need a dynamic array.
 	lines := [dynamic]string{}
@@ -184,17 +295,27 @@ draw_text :: proc(
 			stop when the 'i' counter reaches it.
 	*/
 	start := 0
-	for i := 1 ; i <= max_c_height; i += 1
-	{
+	for i := 1; i <= max_c_height; i += 1 {
 		// First we get the chunk of text that fits within the box.
 		end := start + max_c_width
-		line, ok := str.substring(string(txt), start, end)
+		line: string
+		ok: bool
+		if end < (str.rune_count(txt) - 1)
+		{
+			line, ok = str.substring(txt, start, end)
+		}
+		else
+		{
+			end = str.rune_count(txt)
+			line, ok = str.substring(txt, start, end)
+			append(&lines, line)
+			break
+		}
 
 		// Then, to avoid cutting words in half, we check if the current line
 		// has any spaces in it. If so, more work is needed.
 		has_spaces := str.contains_any(line, " \t\r\n")
-		if has_spaces && ok
-		{
+		if has_spaces && ok {
 			// The actual limit of this line will have to be its last space.
 			limit := str.last_index_any(line, " \t\r\n")
 			ko: bool // This value is unused. 'substring_to' needs to assign it.
@@ -208,19 +329,8 @@ draw_text :: proc(
 			end = start + limit
 		}
 		// And that's that. We just add the line to the list, if it's not blank.
-		if 0 < len(line) 
-		{
+		if 0 < len(line) {
 			append(&lines, line)
-		}
-		/*
-			We'll want to break out of the loop if the indexes used for extracting the
-			initial substring were out of bounds for the original message string.
-			This is determined by the 'ok' value, returned by the first 'substring'
-			call in this loop.
-		*/
-		if !ok
-		{
-			break
 		}
 		/*
 			Finally, we update the 'start' index for the next line, considering:
@@ -242,12 +352,13 @@ draw_text :: proc(
 
 	// And here you go. A nice string adjusted to its bounds!
 	rl.DrawTextEx(
-		font, 
-		printed_msg_cstring, 
-		{ rec.x + padding, rec.y + g_padding }, 
-		cast(f32)g_font.baseSize, 
-		0, 
-		font_color)
+		font,
+		printed_msg_cstring,
+		{rec.x + padding, rec.y + g_padding},
+		cast(f32)g_font.baseSize,
+		0,
+		font_color,
+	)
 }
 
 /*
@@ -266,8 +377,8 @@ init :: proc(
 	font_color := rl.WHITE,
 	boder_color := rl.WHITE,
 	background_color := rl.BLACK,
-	border_thickness: f32 = 1)
-{
+	border_thickness: f32 = 1,
+) {
 	g_font = font
 	g_padding = padding
 	g_font_color = font_color
@@ -289,18 +400,17 @@ init :: proc(
 	border_thickness: pixel size of the outline
 */
 draw_text_box :: proc(
-	box: ^Box, 
-	txt: cstring,
+	box: ^Box,
+	txt: string,
 	font := g_font,
 	padding := g_padding,
 	font_color := g_font_color,
 	border_color := g_border_color,
 	background_color := g_background_color,
-	border_thickness := g_border_thickness)
-{
+	border_thickness := g_border_thickness,
+) {
 	// If the box is neither of these, the 'update_box' call is unnecessary.
-	if .DRAGGABLE in box.flags || .RESIZEABLE in box.flags
-	{
+	if .DRAGGABLE in box.flags || .RESIZABLE in box.flags {
 		update_box(box, padding)
 	}
 	draw_box(box.rec, border_color, background_color, border_thickness)
@@ -327,23 +437,20 @@ draw_label :: proc(
 	font_color := g_font_color,
 	border_color := g_border_color,
 	background_color := g_background_color,
-	border_thickness := g_border_thickness)
-{
+	border_thickness := g_border_thickness,
+) {
 	// We use Raylib's handy 'MeasureTextEx' function to measure the text.
 	// The rest is history.
 	meas := rl.MeasureTextEx(font, txt, f32(font.baseSize), 0)
-	rec := rl.Rectangle { 
-		pos.x,
-		pos.y,
-		meas.x + (padding * 2),
-		meas.y + (padding * 2) }
+	rec := rl.Rectangle{pos.x, pos.y, meas.x + (padding * 2), meas.y + (padding * 2)}
 
 	draw_box(rec, border_color, background_color, border_thickness)
 	rl.DrawTextEx(
-		font, 
-		txt, 
-		{ rec.x + padding, rec.y + padding }, 
-		cast(f32)font.baseSize, 
-		0, 
-		font_color)
+		font,
+		txt,
+		{rec.x + padding, rec.y + padding},
+		cast(f32)font.baseSize,
+		0,
+		font_color,
+	)
 }
