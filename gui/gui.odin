@@ -31,7 +31,6 @@ Box :: struct {
 	rec:          rl.Rectangle,
 	flags:        bit_set[BoxFlag], // Drag & resize can be enabled or disabled here.
 	drag_mode:    BoxDragMode,
-	mouse_offset: rl.Vector2, // Distance between 0,0 and the mouse's postiion.
 	content:      union {
 		string,
 		rl.Texture,
@@ -73,6 +72,10 @@ are_rectangles_overlapping :: proc(rec1: rl.Rectangle, rec2: rl.Rectangle) -> bo
 // Updates the box's values to reflect input according to its 'drag_mode'.
 @(private)
 update_box :: proc(box: ^Box, padding: f32) {
+
+	@(static)
+	mouse_offset: rl.Vector2
+
 	// A few paths will require knowing the mouse's position.
 	mpos := rl.GetMousePosition()
 	reset := false // Whether the box's 'drag_mode' must be reset to 'NONE'
@@ -87,7 +90,7 @@ update_box :: proc(box: ^Box, padding: f32) {
 		if .DRAGGABLE in box.flags && rl.IsMouseButtonPressed(.LEFT) {
 			rl.SetMouseCursor(.RESIZE_ALL)
 			// Calculate the offset between the mouse and the box's origin.
-			box.mouse_offset = {(mpos.x - box.rec.x), (mpos.y - box.rec.y)}
+			mouse_offset = {(mpos.x - box.rec.x), (mpos.y - box.rec.y)}
 			box.drag_mode = .DRAG
 		} else if .RESIZABLE in box.flags && rl.IsMouseButtonPressed(.RIGHT) {
 			// Place the cursor at the bottom-right corner of the box.
@@ -98,8 +101,8 @@ update_box :: proc(box: ^Box, padding: f32) {
 	// When dragging, we need to remember the mouse offset.
 	case .DRAG:
 		if rl.IsMouseButtonDown(.LEFT) {
-			box.rec.x = mpos.x - box.mouse_offset.x
-			box.rec.y = mpos.y - box.mouse_offset.y
+			box.rec.x = mpos.x - mouse_offset.x
+			box.rec.y = mpos.y - mouse_offset.y
 		} else {
 			reset = true
 		}
@@ -124,12 +127,16 @@ update_box :: proc(box: ^Box, padding: f32) {
 
 update_box_list :: proc(box_list: []^Box)
 {
+	@(static)
+	mouse_offset: rl.Vector2
+	
 	mouse_pos := rl.GetMousePosition()
 
 	new_top_index := -1
 	outer: for box, i in box_list
 	{
 		reset := false
+
 
 		mode: switch box.drag_mode
 		{
@@ -158,7 +165,7 @@ update_box_list :: proc(box_list: []^Box)
 			if .DRAGGABLE in box.flags && .LEFT == button_pressed
 			{
 				rl.SetMouseCursor(.RESIZE_ALL)
-				box.mouse_offset = {
+				mouse_offset = {
 					(mouse_pos.x - box.rec.x), 
 					(mouse_pos.y - box.rec.y)
 				}
@@ -184,8 +191,8 @@ update_box_list :: proc(box_list: []^Box)
 		case .DRAG:
 			if rl.IsMouseButtonDown(.LEFT)
 			{
-				box.rec.x = mouse_pos.x - box.mouse_offset.x
-				box.rec.y = mouse_pos.y - box.mouse_offset.y
+				box.rec.x = mouse_pos.x - mouse_offset.x
+				box.rec.y = mouse_pos.y - mouse_offset.y
 			}
 			else
 			{
