@@ -185,34 +185,6 @@ move_box_index_to_index :: proc(
 	list[dst_index] = box
 }
 
-draw_label :: proc(
-	pos        :  rl.Vector2,
-	txt        :  cstring,
-	font       := g_font,
-	padding    := g_padding,
-	txt_color  := g_txt_color,
-	line_color := g_line_color,
-	bg_color   := g_bg_color,
-	line_thick := g_line_thick,
-) {
-	meas := rl.MeasureTextEx(font, txt, f32(font.baseSize), 0)
-	rec := rl.Rectangle{
-		pos.x,
-		pos.y,
-		meas.x + (padding * 2),
-		meas.y + (padding * 2)}
-
-	draw_box(rec, line_color, bg_color, line_thick)
-	rl.DrawTextEx(
-		font,
-		txt,
-		{rec.x + padding, rec.y + padding},
-		cast(f32)font.baseSize,
-		0,
-		txt_color,
-	)
-}
-
 draw_box_list :: proc(list: []^Box)
 {
 	@(static) mouse_offset: rl.Vector2
