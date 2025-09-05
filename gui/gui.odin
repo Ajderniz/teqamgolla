@@ -11,6 +11,8 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
+import "core:fmt"
+
 Box :: struct {
 	rec             : rl.Rectangle,
 
@@ -72,11 +74,13 @@ draw_text :: proc(
 	padding   : f32,
 	txt_color : rl.Color,
 ) {
+	double_padding := padding * 2
 	max_c_width := 
-		int(math.trunc((rec.width - (padding * 2)) / font.recs[0].width))
+		int(math.trunc((rec.width - double_padding) / font.recs[0].width))
 
 	max_c_height :=
-		int(math.trunc((rec.height - (padding * 2)) / f32((font.baseSize + 2))))
+		int(math.trunc((rec.height - double_padding) /
+			             f32((font.baseSize + (font.glyphPadding / 2)))))
 
 	lines := [dynamic]string{}
 	defer delete(lines)
@@ -87,6 +91,7 @@ draw_text :: proc(
 		end := start + max_c_width
 		line: string
 		ok: bool
+
 		if end < (str.rune_count(txt) - 1)
 		{
 			line, ok = str.substring(txt, start, end)
@@ -100,7 +105,7 @@ draw_text :: proc(
 		}
 
 		has_spaces := str.contains_any(line, " \t\r\n")
-		if has_spaces && ok
+		if has_spaces && ok && i < max_c_height
 		{
 			limit := str.last_index_any(line, " \t\r\n")
 			ko: bool // unused
@@ -126,7 +131,7 @@ draw_text :: proc(
 	rl.DrawTextEx(
 		font,
 		printed_msg_cstring,
-		{rec.x + padding, rec.y + g_padding},
+		{rec.x + padding, rec.y + padding},
 		cast(f32)g_font.baseSize,
 		0,
 		txt_color,
@@ -283,13 +288,40 @@ draw_box_list :: proc(list: []^Box)
 		case .RESIZE:
 			if rl.IsMouseButtonDown(.RIGHT)
 			{
+				box.rec.width = mouse_pos.x - box.rec.x
+				box.rec.height = mouse_pos.y - box.rec.y
+
 				double_padding := g_padding * 2
 
-				box.rec.width = mouse_pos.x - box.rec.x if
-					double_padding <= mouse_pos.x - box.rec.x else double_padding
+				switch content in box.content
+				{
+				case string:
 
-				box.rec.height = mouse_pos.y - box.rec.y if
-					double_padding <= mouse_pos.y - box.rec.y else double_padding
+					if mouse_pos.x - box.rec.x <= double_padding
+					{
+						box.rec.width = double_padding
+					}
+					if mouse_pos.y - box.rec.y <= double_padding
+					{
+						box.rec.height = double_padding
+					}
+				case rl.Texture:
+
+					offset := f32(g_font.baseSize) + (g_padding / 2) if 
+						box.header != "" else 0
+
+					min_width := f32(content.width) + double_padding
+					min_height := f32(content.height) + double_padding + offset
+
+					if mouse_pos.x - box.rec.x <= min_width
+					{
+						box.rec.width = min_width
+					}
+					if mouse_pos.y - box.rec.y <= min_height
+					{
+						box.rec.height = min_height
+					}
+				}
 			}
 			else
 			{
@@ -310,18 +342,54 @@ draw_box_list :: proc(list: []^Box)
 		move_box_index_to_index(list, u32(new_top_index), 0)
 	}
 
-	#reverse for box in list
+	#reverse for box, i in list
 	{
 		draw_box(box.rec)
+
+		content_rec: rl.Rectangle = box.rec
+
+		if box.header != ""
+		{
+			offset := f32(g_font.baseSize) + (g_padding / 2)
+
+			header_rec: rl.Rectangle = {
+				box.rec.x,
+				box.rec.y,
+				box.rec.width,
+				offset
+			}
+
+			txt_color := g_txt_color
+			bg_color := g_bg_color
+			if 0 == i
+			{
+				txt_color = rl.WHITE
+				bg_color = rl.BLACK
+			}
+			draw_box(header_rec, bg_color=bg_color)
+			header_rec.height *= 1.2
+			draw_text(header_rec, box.header, g_font, 4, txt_color)
+
+			content_rec.y += offset
+			content_rec.height -= offset
+		}
+
 		switch content in box.content
 		{
 		case string:
-			draw_text(box.rec, content, g_font, g_padding, g_txt_color)
+			draw_text(content_rec, content, g_font, g_padding, g_txt_color)
 
 		case rl.Texture:
+			double_padding := g_padding * 2
+
+			if !(f32(content_rec.width) < (content_rec.width + double_padding)) ||
+				 !(f32(content_rec.height) < (content_rec.height + double_padding))
+			{
+				break
+			}
 			rl.DrawTextureV(
 				content,
-				{ box.rec.x + g_padding, box.rec.y + g_padding},
+				{ content_rec.x + g_padding, content_rec.y + g_padding},
 				rl.WHITE)
 		}
 	}

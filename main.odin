@@ -55,27 +55,27 @@ main :: proc()
   rl.SetTargetFPS(60)
 
   font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
-  gui.init(font, txt_color = rl.BLACK, line_color = rl.BLACK, bg_color = rl.WHITE)
+  gui.init(font, padding = 12, txt_color = rl.BLACK, line_color = rl.BLACK, bg_color = rl.WHITE)
 
   bliss := rl.LoadTexture("res/img/bliss.jpg")
+  danta := rl.LoadTexture("res/img/danta.png")
 
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
   blist := []^gui.Box{ 
-    &{rec={0,0,200,200},
-      flags={.DRAGGABLE, .RESIZABLE},
-      content="Draggable & Resizeable"
-    },
     &{rec={200,0,200,200},
       flags={},
-      content="Still"
+      header="Still",
+      content="Tiger-team marketing lights pen jeans wristwatch corporation man tanto beef noodles industrial grade neon garage DIY. Systemic rifle computer girl assassin shoes pre-render-farm otaku ablative. Wonton soup bomb augmented reality narrative youtube table network construct systema sentient. Shanty town Chiba soul-delay dissident drugs disposable Shibuya j-pop numinous monofilament A.I. knife boy tiger-team render-farm otaku assassin. Futurity savant plastic tower geodesic katana city rebar. "
     },
-    &{rec={0,200,100,100},
-      flags={.DRAGGABLE},
-      content="Draggable"
+    &{rec={0,200,200,200},
+      flags={.DRAGGABLE, .RESIZABLE},
+      header="Draggable",
+      content=danta
     },
     &{rec={200,200,200,200},
       flags={.DRAGGABLE, .RESIZABLE},
+      header="Draggable & resizable",
       content="Sentient digital pistol post-stimulate girl uplink. Urban cartel camera dome hacker cyber-knife tattoo modem. Dissident faded camera bridge cartel nano-shanty town. Rebar saturation point Tokyo nodality chrome alcohol youtube sensory-space claymore mine. Sentient girl soul-delay hotdog weathered j-pop concrete tank-traps drugs neural. Math-RAF tank-traps drugs market spook Shibuya film gang nodal point. Bicycle pre-artisanal knife car corporation plastic apophenia neon spook. Cardboard A.I. tube bicycle order-flow disposable spook corporation face forwards. 3D-printed systemic Shibuya sub-orbital bridge Kowloon shanty town tiger-team face forwards sign nano-refrigerator smart-plastic pen hotdog. "
     },
   }
