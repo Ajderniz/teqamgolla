@@ -149,14 +149,35 @@ init :: proc(
 	g_line_thick = line_thick
 }
 
-bring_box_to_top :: proc(box_list: []^Box, box_index: int)
-{
-	new_top := box_list[box_index]
-	for i := box_index; 0 < i; i -= 1
+move_box_index_to_index :: proc(
+	list  : []^Box,
+	src_index : u32,
+	dst_index : u32
+	) {
+	cap := u32(len(list) - 1)
+	if cap < src_index || cap < dst_index
 	{
-		box_list[i] = box_list[i-1]
+		return
 	}
-	box_list[0] = new_top
+
+	box := list[src_index]	
+
+	if dst_index < src_index
+	{
+		for i := src_index; 0 < i; i -= 1
+		{
+			list[i] = list[i-1]
+		}
+		list[dst_index] = box
+	}
+	else if src_index < dst_index
+	{
+		for i := src_index; i < dst_index; i += 1
+		{
+			list[i] = list[i+1]
+		}
+	}
+	list[dst_index] = box
 }
 
 draw_label :: proc(
@@ -286,7 +307,7 @@ draw_box_list :: proc(list: []^Box)
 	}
 	if 0 < new_top_index
 	{
-		bring_box_to_top(list, new_top_index)
+		move_box_index_to_index(list, u32(new_top_index), 0)
 	}
 
 	#reverse for box in list

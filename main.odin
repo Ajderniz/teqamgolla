@@ -15,8 +15,6 @@ import rl "vendor:raylib"
 
 import "gui"
 
-import "core:fmt"
-
 /* 'NAT' here stands for 'native'. */
 NAT_SCR_W :: 640
 NAT_SCR_H :: NAT_SCR_W / 4 * 3
@@ -88,7 +86,14 @@ main :: proc()
   {
     if rl.IsKeyPressed(.TAB)
     {
-      gui.bring_box_to_top(blist, 1)
+      if rl.IsKeyDown(.LEFT_SHIFT)
+      {
+        gui.move_box_index_to_index(blist, 0, u32(len(blist) - 1))
+      }
+      else
+      {
+        gui.move_box_index_to_index(blist, u32(len(blist) - 1), 0)
+      }
     }
 
     rl.BeginTextureMode(rtxr)
