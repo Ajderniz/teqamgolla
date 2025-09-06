@@ -14,21 +14,21 @@ import rl  "vendor:raylib"
 import "core:fmt"
 
 Box :: struct {
-	rec             : rl.Rectangle,
+	rec        : rl.Rectangle,
 
-	flags           : bit_set[enum{ DRAGGABLE, RESIZABLE }],
-	drag_mode       : enum{ NONE, DRAG, RESIZE },
+	flags      : bit_set[enum{ DRAGGABLE, RESIZABLE }],
+	drag_mode  : enum{ NONE, DRAG, RESIZE },
 
-	header          : string,
-	content         : union { string, rl.Texture },
+	header     : string,
+	content    : union { string, rl.Texture },
 
-	appearance_mode : enum { GLOBAL, CUSTOM },
-	font            : rl.Font,
-	padding         : f32,
-	txt_color       : rl.Color,
-	line_color      : rl.Color,
-	bg_color        : rl.Color,
-	line_thick      : f32
+	style      : enum { GLOBAL, CUSTOM },
+	font       : rl.Font,
+	padding    : f32,
+	txt_color  : rl.Color,
+	line_color : rl.Color,
+	bg_color   : rl.Color,
+	line_thick : f32
 }
 
 @(private) g_font       : rl.Font
@@ -56,11 +56,11 @@ are_rectangles_overlapping :: proc(
 }
 
 @(private)
-draw_box :: proc(
-	rec        :  rl.Rectangle,
-	line_color := g_line_color,
-	bg_color   := g_bg_color,
-	line_thick := g_line_thick,
+draw_rectangle_with_outline :: proc(
+	rec        : rl.Rectangle,
+	line_color : rl.Color,
+	bg_color   : rl.Color,
+	line_thick : f32
 ) {
 	rl.DrawRectangleRec(rec, bg_color)
 	rl.DrawRectangleLinesEx(rec, line_thick, line_color)
@@ -75,20 +75,27 @@ draw_text :: proc(
 	txt_color : rl.Color,
 ) {
 	double_padding := padding * 2
-	max_c_width := 
-		int(math.trunc((rec.width - double_padding) / font.recs[0].width))
 
-	max_c_height :=
-		int(math.trunc((rec.height - double_padding) /
-			             f32((font.baseSize + (font.glyphPadding / 2)))))
+	max_cols: int
+	max_lines: int
+	{
+		max_width := rec.width - double_padding
+		max_cols = int(math.trunc(max_width / font.recs[0].width))
+
+		glyph_padding := f32(font.glyphPadding) / 2
+		max_height := rec.height - double_padding + glyph_padding
+		glyph_height := f32(font.baseSize) + glyph_padding
+		max_lines = int(math.trunc(max_height / glyph_height))
+	}
 
 	lines := [dynamic]string{}
 	defer delete(lines)
 
+	txt_needs_ellipsis := true
 	start := 0
-	for i := 1; i <= max_c_height; i += 1
+	for i := 1; i <= max_lines; i += 1
 	{
-		end := start + max_c_width
+		end := start + max_cols
 		line: string
 		ok: bool
 
@@ -101,11 +108,13 @@ draw_text :: proc(
 			end = str.rune_count(txt)
 			line, ok = str.substring(txt, start, end)
 			append(&lines, line)
+			txt_needs_ellipsis = false
 			break
 		}
 
 		has_spaces := str.contains_any(line, " \t\r\n")
-		if has_spaces && ok && i < max_c_height
+		is_last_line := max_lines <= i
+		if has_spaces && ok && !is_last_line
 		{
 			limit := str.last_index_any(line, " \t\r\n")
 			ko: bool // unused
@@ -116,6 +125,11 @@ draw_text :: proc(
 
 			end = start + limit
 		}
+		else if is_last_line
+		{
+			ko: bool
+			line, ko = str.substring_to(line, str.rune_count(line) - 3)
+		}
 		if 0 < len(line)
 		{
 			append(&lines, line)
@@ -123,9 +137,28 @@ draw_text :: proc(
 		start = end + 1 if has_spaces else end
 	}
 
-	printed_msg := str.join(lines[:], "\n")
-	printed_msg_cstring := str.clone_to_cstring(printed_msg)
-	defer delete(printed_msg)
+	if max_cols <= 3
+	{
+		length := len(lines)
+		if 0 < length
+		{
+			lines[length - 1] = "..."
+		} else
+		{
+			append(&lines, "...")
+		}
+		txt_needs_ellipsis = false
+	}
+
+	printed_txt := str.join(lines[:], "\n")
+	if txt_needs_ellipsis
+	{
+		old_txt := printed_txt
+		printed_txt = str.join({printed_txt, "..."}, "")
+		delete(old_txt)
+	}
+	printed_msg_cstring := str.clone_to_cstring(printed_txt)
+	defer delete(printed_txt)
 	defer delete(printed_msg_cstring)
 
 	rl.DrawTextEx(
@@ -265,25 +298,31 @@ draw_box_list :: proc(list: []^Box)
 
 				double_padding := g_padding * 2
 
+				header_offset := f32(g_font.baseSize) + (g_padding / 2) if 
+					box.header != "" else 0
+
 				switch content in box.content
 				{
 				case string:
 
-					if mouse_pos.x - box.rec.x <= double_padding
+					font := box.font if .CUSTOM == box.style else g_font
+
+					min_width := f32(font.recs[0].width * 3) + double_padding
+					min_height := f32(font.baseSize) + double_padding + header_offset
+
+					if mouse_pos.x - box.rec.x <= min_width
 					{
-						box.rec.width = double_padding
+						box.rec.width = min_width
 					}
-					if mouse_pos.y - box.rec.y <= double_padding
+
+					if mouse_pos.y - box.rec.y <= min_height
 					{
-						box.rec.height = double_padding
+						box.rec.height = min_height
 					}
 				case rl.Texture:
 
-					offset := f32(g_font.baseSize) + (g_padding / 2) if 
-						box.header != "" else 0
-
 					min_width := f32(content.width) + double_padding
-					min_height := f32(content.height) + double_padding + offset
+					min_height := f32(content.height) + double_padding + header_offset
 
 					if mouse_pos.x - box.rec.x <= min_width
 					{
@@ -316,40 +355,40 @@ draw_box_list :: proc(list: []^Box)
 
 	#reverse for box, i in list
 	{
-		draw_box(box.rec)
-
 		content_rec: rl.Rectangle = box.rec
 
 		if box.header != ""
 		{
+			txt_color := rl.WHITE if 0 == i else g_txt_color
+			bg_color := rl.BLACK if 0 == i else g_bg_color
+
 			offset := f32(g_font.baseSize) + (g_padding / 2)
 
-			header_rec: rl.Rectangle = {
-				box.rec.x,
-				box.rec.y,
-				box.rec.width,
-				offset
-			}
+			header_rec := box.rec
+			header_rec.height = offset
+			draw_rectangle_with_outline(header_rec, rl.BLACK, bg_color, 1)
 
-			txt_color := g_txt_color
-			bg_color := g_bg_color
-			if 0 == i
-			{
-				txt_color = rl.WHITE
-				bg_color = rl.BLACK
-			}
-			draw_box(header_rec, bg_color=bg_color)
-			header_rec.height *= 1.2
-			draw_text(header_rec, box.header, g_font, 4, txt_color)
+			header_rec.y -= g_padding * 0.75
+			header_rec.height *= 2
+			draw_text(header_rec, box.header, g_font, g_padding, txt_color)
 
 			content_rec.y += offset
 			content_rec.height -= offset
 		}
 
+		font       := box.font       if .CUSTOM == box.style else g_font
+		padding    := box.padding    if .CUSTOM == box.style else g_padding
+		txt_color  := box.txt_color  if .CUSTOM == box.style else g_txt_color
+		line_color := box.line_color if .CUSTOM == box.style else g_line_color
+		bg_color   := box.bg_color   if .CUSTOM == box.style else g_bg_color
+		line_thick := box.line_thick if .CUSTOM == box.style else g_line_thick
+
+		draw_rectangle_with_outline(content_rec, line_color, bg_color, line_thick)
+
 		switch content in box.content
 		{
 		case string:
-			draw_text(content_rec, content, g_font, g_padding, g_txt_color)
+			draw_text(content_rec, content, font, padding, txt_color)
 
 		case rl.Texture:
 			double_padding := g_padding * 2
@@ -359,9 +398,17 @@ draw_box_list :: proc(list: []^Box)
 			{
 				break
 			}
-			rl.DrawTextureV(
+			rl.DrawTexturePro(
 				content,
-				{ content_rec.x + g_padding, content_rec.y + g_padding},
+				{ 0, 0, f32(content.width), f32(content.height) },
+				{ 
+					content_rec.x + padding,
+					content_rec.y + padding,
+					content_rec.width - double_padding,
+					content_rec.height - double_padding
+				},
+				{ 0, 0 },
+				0,
 				rl.WHITE)
 		}
 	}

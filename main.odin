@@ -15,6 +15,8 @@ import rl "vendor:raylib"
 
 import "gui"
 
+import "core:fmt"
+
 /* 'NAT' here stands for 'native'. */
 NAT_SCR_W :: 640
 NAT_SCR_H :: NAT_SCR_W / 4 * 3
@@ -63,19 +65,19 @@ main :: proc()
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
   blist := []^gui.Box{ 
-    &{rec={200,0,200,200},
+    &{rec={0,0,200,200},
       flags={},
-      header="Still",
+      header="1: Still",
       content="Tiger-team marketing lights pen jeans wristwatch corporation man tanto beef noodles industrial grade neon garage DIY. Systemic rifle computer girl assassin shoes pre-render-farm otaku ablative. Wonton soup bomb augmented reality narrative youtube table network construct systema sentient. Shanty town Chiba soul-delay dissident drugs disposable Shibuya j-pop numinous monofilament A.I. knife boy tiger-team render-farm otaku assassin. Futurity savant plastic tower geodesic katana city rebar. "
+    },
+    &{rec={200,0,f32(danta.width) + 32,f32(danta.height) + 48},
+      flags={.DRAGGABLE, .RESIZABLE},
+      header="2: Draggable",
+      content=danta
     },
     &{rec={0,200,200,200},
       flags={.DRAGGABLE, .RESIZABLE},
-      header="Draggable",
-      content=danta
-    },
-    &{rec={200,200,200,200},
-      flags={.DRAGGABLE, .RESIZABLE},
-      header="Draggable & resizable",
+      header="3: Draggable & resizable",
       content="Sentient digital pistol post-stimulate girl uplink. Urban cartel camera dome hacker cyber-knife tattoo modem. Dissident faded camera bridge cartel nano-shanty town. Rebar saturation point Tokyo nodality chrome alcohol youtube sensory-space claymore mine. Sentient girl soul-delay hotdog weathered j-pop concrete tank-traps drugs neural. Math-RAF tank-traps drugs market spook Shibuya film gang nodal point. Bicycle pre-artisanal knife car corporation plastic apophenia neon spook. Cardboard A.I. tube bicycle order-flow disposable spook corporation face forwards. 3D-printed systemic Shibuya sub-orbital bridge Kowloon shanty town tiger-team face forwards sign nano-refrigerator smart-plastic pen hotdog. "
     },
   }
