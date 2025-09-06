@@ -296,7 +296,8 @@ draw_box_list :: proc(list: []^Box)
 				box.rec.width = mouse_pos.x - box.rec.x
 				box.rec.height = mouse_pos.y - box.rec.y
 
-				double_padding := g_padding * 2
+				double_padding := box.padding * 2 if
+					.CUSTOM == box.style else g_padding * 2
 
 				header_offset := f32(g_font.baseSize) + (g_padding / 2) if 
 					box.header != "" else 0
@@ -391,7 +392,8 @@ draw_box_list :: proc(list: []^Box)
 			draw_text(content_rec, content, font, padding, txt_color)
 
 		case rl.Texture:
-			double_padding := g_padding * 2
+			double_padding := box.padding * 2 if
+				.CUSTOM == box.style else g_padding * 2
 
 			if !(f32(content_rec.width) < (content_rec.width + double_padding)) ||
 				 !(f32(content_rec.height) < (content_rec.height + double_padding))
