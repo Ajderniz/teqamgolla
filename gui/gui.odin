@@ -363,18 +363,18 @@ draw_box_list :: proc(list: []^Box)
 			txt_color := rl.WHITE if 0 == i else g_txt_color
 			bg_color := rl.BLACK if 0 == i else g_bg_color
 
-			offset := f32(g_font.baseSize) + (g_padding / 2)
+			header_offset := f32(g_font.baseSize) + (g_padding / 2)
 
 			header_rec := box.rec
-			header_rec.height = offset
+			header_rec.height = header_offset
 			draw_rectangle_with_outline(header_rec, rl.BLACK, bg_color, 1)
 
 			header_rec.y -= g_padding * 0.75
 			header_rec.height *= 2
 			draw_text(header_rec, box.header, g_font, g_padding, txt_color)
 
-			content_rec.y += offset
-			content_rec.height -= offset
+			content_rec.y += header_offset
+			content_rec.height -= header_offset
 		}
 
 		font       := box.font       if .CUSTOM == box.style else g_font
@@ -395,11 +395,6 @@ draw_box_list :: proc(list: []^Box)
 			double_padding := box.padding * 2 if
 				.CUSTOM == box.style else g_padding * 2
 
-			if !(f32(content_rec.width) < (content_rec.width + double_padding)) ||
-				 !(f32(content_rec.height) < (content_rec.height + double_padding))
-			{
-				break
-			}
 			rl.DrawTexturePro(
 				content,
 				{ 0, 0, f32(content.width), f32(content.height) },
