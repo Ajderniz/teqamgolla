@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * "The Exploration of the Vaults of King Teqamgolla" - by Axel "Ajderniz" Lopez
+ * "Exploring the Vaults of King Teqamgolla" - by Axel "Ajderniz" Lopez
  * 
  * Mostly a hidden objects game.
  *
@@ -54,31 +54,25 @@ main :: proc()
 
   rl.InitWindow(NAT_SCR_W, NAT_SCR_H, "Teqamgolla")
 
-  rl.SetTargetFPS(60)
+  rl.SetTargetFPS(25)
 
   font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
-  gui.init(font, padding = 12, txt_color = rl.BLACK, line_color = rl.BLACK, bg_color = rl.WHITE)
+  gui.init(font, pad = 12, txt_color = rl.BLACK, line_color = rl.BLACK, bg_color = rl.WHITE)
 
   bliss := rl.LoadTexture("res/img/bliss.jpg")
   danta := rl.LoadTexture("res/img/danta.png")
+  dalila := rl.LoadTexture("res/img/dalila.png")
 
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
+  img1 := gui.Image{danta, .CENTER}
+  img2 := gui.Image{dalila, .STRETCH}
   blist := []^gui.Box{ 
-    &{rec={0,0,200,200},
-      flags={},
-      header="1: Still",
-      content="Tiger-team marketing lights pen jeans wristwatch corporation man tanto beef noodles industrial grade neon garage DIY. Systemic rifle computer girl assassin shoes pre-render-farm otaku ablative. Wonton soup bomb augmented reality narrative youtube table network construct systema sentient. Shanty town Chiba soul-delay dissident drugs disposable Shibuya j-pop numinous monofilament A.I. knife boy tiger-team render-farm otaku assassin. Futurity savant plastic tower geodesic katana city rebar. "
-    },
-    &{rec={200,0,f32(danta.width) + 32,f32(danta.height) + 48},
-      flags={.DRAGGABLE, .RESIZABLE},
-      header="2: Draggable",
-      content=danta
-    },
-    &{rec={0,200,200,200},
-      flags={.DRAGGABLE, .RESIZABLE},
-      header="3: Draggable & resizable",
-      content="Sentient digital pistol post-stimulate girl uplink. Urban cartel camera dome hacker cyber-knife tattoo modem. Dissident faded camera bridge cartel nano-shanty town. Rebar saturation point Tokyo nodality chrome alcohol youtube sensory-space claymore mine. Sentient girl soul-delay hotdog weathered j-pop concrete tank-traps drugs neural. Math-RAF tank-traps drugs market spook Shibuya film gang nodal point. Bicycle pre-artisanal knife car corporation plastic apophenia neon spook. Cardboard A.I. tube bicycle order-flow disposable spook corporation face forwards. 3D-printed systemic Shibuya sub-orbital bridge Kowloon shanty town tiger-team face forwards sign nano-refrigerator smart-plastic pen hotdog. "
+    &{
+      options={ .DRAGGABLE, .RESIZABLE },
+      header="HEADER",
+      content={img1, img2}, //img1},//, "Lights wonton soup soul-delay refrigerator construct into monofilament chrome. Carbon jeans courier garage long-chain hydrocarbons sunglasses RAF camera stimulate hacker towards. Assassin corrupted geodesic cyber-table chrome saturation point. Wristwatch tattoo office pre-Kowloon construct vinyl shrine cardboard katana kanji narrative numinous sensory concrete corporation. Rebar 8-bit savant RAF network advert rain woman face forwards receding industrial grade geodesic concrete military-grade monofilament. Girl network rebar ablative city dissident cyber-bicycle youtube long-chain hydrocarbons vehicle car DIY sentient franchise j-pop.", "A.I. dead market otaku kanji euro-pop rifle weathered tiger-team neon. Cardboard artisanal neural market sign courier corrupted BASE jump. Bicycle chrome girl pen tiger-team saturation point math-franchise render-farm wonton soup. Boy 8-bit katana nodality futurity alcohol man dissident girl convenience store corrupted disposable j-pop pistol ablative. Rebar market drone skyscraper disposable artisanal refrigerator plastic DIY Tokyo papier-mache smart-shoes monofilament paranoid boat advert. Order-flow city industrial grade kanji wristwatch marketing katana wonton soup woman tanto geodesic.", "Otaku katana weathered geodesic marketing Kowloon RAF sub-orbital papier-mache soul-delay dead augmented reality media nano-jeans neon. Geodesic vehicle Kowloon neon construct RAF tube DIY meta-bridge post-decay kanji modem systemic sign range-rover. Marketing dome tanto sprawl youtube long-chain hydrocarbons nodal point. Corporation tube assassin grenade j-pop nano-franchise cartel artisanal kanji render-farm tiger-team free-market tanto bomb. Artisanal sign drugs nodality neural knife city."},
+      layout=.HORIZONTAL
     },
   }
 
@@ -121,6 +115,8 @@ main :: proc()
   /* ========================= DE-INITIALIZATION ============================ */
 
   rl.UnloadTexture(bliss)
+  rl.UnloadTexture(danta)
+  rl.UnloadTexture(dalila)
 
   rl.UnloadRenderTexture(rtxr)
 
