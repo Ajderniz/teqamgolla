@@ -65,13 +65,13 @@ main :: proc()
 
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
-  img1 := gui.Image{danta, .CENTER}
-  img2 := gui.Image{dalila, .STRETCH}
-  blist := []^gui.Box{ 
+  img1 := gui.ImageElement{danta, .CENTER}
+  blist := []^gui.Window{ 
     &{
+      rec={10, 10, 300, 300},
       options={ .DRAGGABLE, .RESIZABLE },
       header="HEADER",
-      content={img1, img2}, //img1},//, "Lights wonton soup soul-delay refrigerator construct into monofilament chrome. Carbon jeans courier garage long-chain hydrocarbons sunglasses RAF camera stimulate hacker towards. Assassin corrupted geodesic cyber-table chrome saturation point. Wristwatch tattoo office pre-Kowloon construct vinyl shrine cardboard katana kanji narrative numinous sensory concrete corporation. Rebar 8-bit savant RAF network advert rain woman face forwards receding industrial grade geodesic concrete military-grade monofilament. Girl network rebar ablative city dissident cyber-bicycle youtube long-chain hydrocarbons vehicle car DIY sentient franchise j-pop.", "A.I. dead market otaku kanji euro-pop rifle weathered tiger-team neon. Cardboard artisanal neural market sign courier corrupted BASE jump. Bicycle chrome girl pen tiger-team saturation point math-franchise render-farm wonton soup. Boy 8-bit katana nodality futurity alcohol man dissident girl convenience store corrupted disposable j-pop pistol ablative. Rebar market drone skyscraper disposable artisanal refrigerator plastic DIY Tokyo papier-mache smart-shoes monofilament paranoid boat advert. Order-flow city industrial grade kanji wristwatch marketing katana wonton soup woman tanto geodesic.", "Otaku katana weathered geodesic marketing Kowloon RAF sub-orbital papier-mache soul-delay dead augmented reality media nano-jeans neon. Geodesic vehicle Kowloon neon construct RAF tube DIY meta-bridge post-decay kanji modem systemic sign range-rover. Marketing dome tanto sprawl youtube long-chain hydrocarbons nodal point. Corporation tube assassin grenade j-pop nano-franchise cartel artisanal kanji render-farm tiger-team free-market tanto bomb. Artisanal sign drugs nodality neural knife city."},
+      content={img1, "Faded concrete shanty town katana gang dissident semiotics receding A.I. Shibuya apophenia drugs Legba systema RAF. Spook Legba military-grade geodesic render-farm shrine pen computer market film-space faded augmented reality sprawl nodal point long-chain hydrocarbons. Drone denim engine narrative modem systema bicycle vinyl city refrigerator corrupted table bomb lights tank-traps. Engine motion DIY plastic-space silent assault numinous cartel order-flow weathered physical geodesic pen construct range-rover. Realism neon military-grade construct modem advert tiger-team cyber-man 8-bit tube office dissident garage disposable render-farm soul-delay. J-pop soul-delay kanji shrine military-grade render-farm city warehouse decay shanty town engine. Office Kowloon footage digital table drugs neon market fetishism dead courier. Shrine knife digital alcohol bomb free-market convenience store vinyl sunglasses shoes dead tanto Tokyo."},
       layout=.HORIZONTAL
     },
   }
@@ -84,11 +84,11 @@ main :: proc()
     {
       if rl.IsKeyDown(.LEFT_SHIFT)
       {
-        gui.move_box_index_to_index(blist, 0, u32(len(blist) - 1))
+        gui.move_window_index_to_index(blist, 0, u32(len(blist) - 1))
       }
       else
       {
-        gui.move_box_index_to_index(blist, u32(len(blist) - 1), 0)
+        gui.move_window_index_to_index(blist, u32(len(blist) - 1), 0)
       }
     }
 
@@ -96,7 +96,7 @@ main :: proc()
 
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
-      gui.draw_box_list(blist)
+      gui.draw_window_list(blist)
 
     rl.EndTextureMode()
 
