@@ -15,14 +15,14 @@ import rl   "vendor:raylib"
 import "core:fmt"
 
 ElementDimensions :: struct {
-  rec       : rl.Rectangle,
-  min_size  : rl.Vector2,
-  max_size  : rl.Vector2,
-  resizable : bool
+  rec           : rl.Rectangle,
+  min_size      : rl.Vector2,
+  max_size      : rl.Vector2,
+  non_resizable : bool
 }
 
 TextElement :: struct {
-  text       : string,
+  txt       : string,
   using dims : ElementDimensions
 }
 
@@ -56,8 +56,13 @@ Window :: struct {
   draggable   : bool,
   mouse_state : MouseState,
 
+  base_unit   : rl.Vector2,
+
   using box   : BoxElement
 }
+
+@(private)
+DrawBoxOptions :: bit_set[enum {HIGHLIGHT, UPDATE_SIZES, SUB_BOX}]
 
 @(private) g_font       : rl.Font
 @(private) g_pad        : f32
@@ -337,68 +342,91 @@ update_box_content_sizes :: proc(box: ^BoxElement)
     switch e in box.content[isp.index]
     {
     case ^TextElement:
-      if .VERTICAL == box.layout
+      if !e.non_resizable
       {
-        e.rec.width = box.rec.width - double_pad
-        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        if .VERTICAL == box.layout {
+          e.rec.width = box.rec.width - double_pad
+          e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        }
+        else
+        {
+          e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+          e.rec.height = box.rec.height - double_pad
+          e.rec.height -= (box.header != "") ? g_header_height : 0
+        }
+        if e.min_size.x <= e.max_size.x
+        {
+          e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
+        }
+        if e.min_size.y <= e.max_size.y
+        {
+          e.rec.height= (e.max_size.y < e.rec.height)? e.max_size.y:e.rec.height
+        }
       }
       else
       {
-        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
-        e.rec.height = box.rec.height - double_pad
-        e.rec.height -= (box.header != "") ? g_header_height : 0
-      }
-      if e.min_size.x <= e.max_size.x
-      {
-        e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
-      }
-      if e.min_size.y <= e.max_size.y
-      {
-        e.rec.height= (e.max_size.y < e.rec.height)? e.max_size.y:e.rec.height
+        e.rec.width  = e.min_size.x
+        e.rec.height = e.min_size.y
       }
       used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
     case ^ImageElement:
-      if .VERTICAL == box.layout
+      if !e.non_resizable
       {
-        e.rec.width = box.rec.width - double_pad
-        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        if .VERTICAL == box.layout
+        {
+          e.rec.width = box.rec.width - double_pad
+          e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        }
+        else
+        {
+          e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+          e.rec.height = box.rec.height - double_pad
+          e.rec.height -= (box.header != "") ? g_header_height : 0
+        }
+        if e.min_size.x <= e.max_size.x
+        {
+          e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
+        }
+        if e.min_size.y <= e.max_size.y
+        {
+          e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y:e.rec.height
+        }
       }
       else
       {
-        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
-        e.rec.height = box.rec.height - double_pad
-        e.rec.height -= (box.header != "") ? g_header_height : 0
-      }
-      if e.min_size.x <= e.max_size.x
-      {
-        e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
-      }
-      if e.min_size.y <= e.max_size.y
-      {
-        e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y:e.rec.height
+        e.rec.width  = e.min_size.x
+        e.rec.height = e.min_size.y
       }
       used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
     case ^BoxElement:
-      if .VERTICAL == box.layout
+      if !e.non_resizable
       {
-        e.rec.width = box.rec.width
-        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        if .VERTICAL == box.layout
+        {
+          e.rec.width = box.rec.width
+          e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+        }
+        else
+        {
+          e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+          e.rec.height = box.rec.height
+          e.rec.height -= (box.header != "") ? g_header_height : 0
+        }
+        if e.min_size.x <= e.max_size.x
+        {
+          e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
+        }
+        if e.min_size.y <= e.max_size.y
+        {
+          e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y:e.rec.height
+        }
       }
       else
       {
-        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
-        e.rec.height = box.rec.height
-        e.rec.height -= (box.header != "") ? g_header_height : 0
-      }
-      if e.min_size.x <= e.max_size.x
-      {
-        e.rec.width = (e.max_size.x < e.rec.width) ? e.max_size.x : e.rec.width
-      }
-      if e.min_size.y <= e.max_size.y
-      {
-        e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y : e.rec.height
+        e.rec.width  = e.min_size.x
+        e.rec.height = e.min_size.y
       }
       used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
     }
@@ -411,7 +439,7 @@ update_box_content_sizes :: proc(box: ^BoxElement)
 draw_box :: proc(
   box     : ^BoxElement,
   rec     : rl.Rectangle,
-  options : bit_set[enum {HIGHLIGHT, UPDATE_SIZES, SUB_BOX}],
+  options : DrawBoxOptions,
   ) {
   font := (.CUSTOM == box.style) ? box.font       : g_font
   pad  := (.CUSTOM == box.style) ? box.pad        : g_pad
@@ -471,7 +499,7 @@ draw_box :: proc(
         e.rec.y = box.rec.y + header_offset + pad
         content_offset += pad + e.rec.width
       }
-      draw_text(e.rec, e.text, font, txt_color)
+      draw_text(e.rec, e.txt, font, txt_color)
 
     case ^ImageElement:
       if .VERTICAL == box.layout
@@ -523,7 +551,10 @@ draw_box :: proc(
         e.rec.y = box.rec.y + header_offset
         content_offset += e.rec.width
       }
-      draw_box(e, e.rec, {.UPDATE_SIZES, .SUB_BOX})
+      options := 
+        (.UPDATE_SIZES in options) ? DrawBoxOptions{.UPDATE_SIZES, .SUB_BOX} :
+                                     DrawBoxOptions{.SUB_BOX}
+      draw_box(e, e.rec, options)
     }
   }
 }
@@ -534,6 +565,7 @@ draw_window :: proc(win: ^Window, highlight: bool, update_sizes: bool)
   configure_box_min_size(&win.box)
   win.rec.width =(win.rec.width  < win.min_size.x)? win.min_size.x:win.rec.width
   win.rec.height=(win.rec.height < win.min_size.y)?win.min_size.y:win.rec.height
+
   if win.min_size.x < win.max_size.x
   {
     win.rec.width =(win.max_size.x<win.rec.width) ? win.max_size.x:win.rec.width
@@ -542,7 +574,18 @@ draw_window :: proc(win: ^Window, highlight: bool, update_sizes: bool)
   {
     win.rec.height=(win.max_size.y<win.rec.height)?win.max_size.x:win.rec.height
   }
-  draw_box(&win.box, win.rec, {.HIGHLIGHT, .UPDATE_SIZES})
+
+  if 1 < win.base_unit.x && 1 < win.base_unit.y
+  {
+    win.rec.x -= f32(int(win.rec.x) % int(win.base_unit.x))
+    win.rec.y -= f32(int(win.rec.y) % int(win.base_unit.y))
+    win.rec.width -= f32(int(win.rec.width) % int(win.base_unit.x))
+    win.rec.height -= f32(int(win.rec.height) % int(win.base_unit.y))
+  }
+
+  options := (highlight) ? DrawBoxOptions{.HIGHLIGHT} : {}
+  options += (update_sizes) ? DrawBoxOptions{.UPDATE_SIZES} : {}
+  draw_box(&win.box, win.rec, options)
   rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_line_color)
 }
 
@@ -637,7 +680,6 @@ update_window_list :: proc(
 
       if win.draggable && .LEFT == button_pressed
       {
-        //rl.SetMouseCursor(.RESIZE_ALL)
         mouse_state = .DRAG
         mouse_offset = {
           (mouse_pos.x - win.rec.x), 
@@ -645,13 +687,12 @@ update_window_list :: proc(
         }
         win.mouse_state = .DRAG
       } 
-      else if win.dims.resizable && .RIGHT == button_pressed
+      else if !win.non_resizable && .RIGHT == button_pressed
       {
         rl.SetMousePosition(
           i32(win.rec.x + win.rec.width) * i32(scale),
           i32(win.rec.y + win.rec.height) * i32(scale)
           )
-        //rl.SetMouseCursor(.RESIZE_NWSE)
         mouse_state = .RESIZE
         win.mouse_state = .RESIZE
       }
@@ -688,7 +729,6 @@ update_window_list :: proc(
     }
     if reset
     {
-      //rl.SetMouseCursor(.DEFAULT)
       mouse_state = .DEFAULT
       win.mouse_state = .DEFAULT
       continue

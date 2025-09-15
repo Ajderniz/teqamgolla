@@ -65,7 +65,8 @@ main :: proc()
 
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
 
-  rl.SetTargetFPS(FPS)
+
+  rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
   font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
   gui.init(font) 
@@ -74,44 +75,44 @@ main :: proc()
 
   bliss := rl.LoadTexture("res/img/bliss.jpg")
   danta := rl.LoadTexture("res/img/danta.png")
-  dalila := rl.LoadTexture("res/img/dalila.png")
 
-  rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
+  rl.SetTargetFPS(FPS)
 
   txt1 := gui.TextElement {
-    text="3D-printed construct marketing industrial grade physical footage military-grade augmented reality paranoid free-market long-chain hydrocarbons refrigerator decay Chiba film RAF urban. Nano-DIY singularity lights knife crypto-sprawl rebar. Tokyo Shibuya lights ablative Legba post-girl realism military-grade rebar hacker industrial grade shanty town cardboard. Soul-delay vinyl office nodality table tower concrete crypto-math-kanji Legba tiger-team film stimulate bridge. Footage physical tube augmented reality narrative car beef noodles film numinous systemic cardboard BASE jump receding. 8-bit franchise alcohol sub-orbital post-saturation point semiotics tower bridge drone uplink face forwards chrome. Disposable wonton soup ablative film cardboard decay systema futurity paranoid smart-gang. ",
+    txt="3D-printed construct marketing industrial grade physical footage military-grade augmented reality paranoid free-market long-chain hydrocarbons refrigerator decay Chiba film RAF urban. Nano-DIY singularity lights knife crypto-sprawl rebar. Tokyo Shibuya lights ablative Legba post-girl realism military-grade rebar hacker industrial grade shanty town cardboard. Soul-delay vinyl office nodality table tower concrete crypto-math-kanji Legba tiger-team film stimulate bridge. Footage physical tube augmented reality narrative car beef noodles film numinous systemic cardboard BASE jump receding. 8-bit franchise alcohol sub-orbital post-saturation point semiotics tower bridge drone uplink face forwards chrome. Disposable wonton soup ablative film cardboard decay systema futurity paranoid smart-gang. ",
     dims={min_size={100, 0}}
   }
 
   txt2 := gui.TextElement {
-    text="Fetishism footage nano-denim soul-delay city post-tattoo sprawl Chiba. Grenade dome voodoo god realism augmented reality narrative euro-pop denim face forwards hacker. Katana network Chiba dissident denim man city uplink towards faded skyscraper market paranoid. Augmented reality digital bicycle sentient tube spook industrial grade physical franchise. Savant franchise tattoo chrome dome systemic pen long-chain hydrocarbons post-shanty town. Camera systema grenade nodality Tokyo neural bicycle DIY. Savant silent beef noodles Tokyo marketing courier order-flow skyscraper free-market sprawl advert meta-motion wonton soup smart-disposable hacker. Free-market 8-bit boy Chiba narrative garage paranoid shanty town digital camera footage. Network fluidity BASE jump advert Kowloon RAF range-rover pre-neural rebar convenience store. "
+    txt="Fetishism footage nano-denim soul-delay city post-tattoo sprawl Chiba. Grenade dome voodoo god realism augmented reality narrative euro-pop denim face forwards hacker. Katana network Chiba dissident denim man city uplink towards faded skyscraper market paranoid. Augmented reality digital bicycle sentient tube spook industrial grade physical franchise. Savant franchise tattoo chrome dome systemic pen long-chain hydrocarbons post-shanty town. Camera systema grenade nodality Tokyo neural bicycle DIY. Savant silent beef noodles Tokyo marketing courier order-flow skyscraper free-market sprawl advert meta-motion wonton soup smart-disposable hacker. Free-market 8-bit boy Chiba narrative garage paranoid shanty town digital camera footage. Network fluidity BASE jump advert Kowloon RAF range-rover pre-neural rebar convenience store. "
   }
 
   img1 := gui.ImageElement {
     texture=danta,
-    resize=.CENTER
+    resize=.NONE,
   }
 
   img2 := gui.ImageElement {
-    texture=dalila,
+    texture=danta,
     resize=.STRETCH
   }
 
   box1 := gui.BoxElement {
     content={&txt2, &img1},
+    layout=.HORIZONTAL,
+    header="BOX1"
   }
 
   box2 := gui.BoxElement {
     content={&txt1, &img2},
-    layout=.HORIZONTAL
+    header="BOX2"
   }
 
   win: gui.Window = {
     draggable=true,
-    dims={resizable=true},
     header="HEADER",
     content={&box2, &box1},
-    layout=.HORIZONTAL
+    layout=.HORIZONTAL,
   }
   win.box.rec.x = 10
   win.box.rec.y = 10
@@ -184,14 +185,11 @@ main :: proc()
         rl.WHITE)
     rl.EndDrawing()
   }
+    rl.UnloadTexture(danta)
+    rl.UnloadTexture(bliss)
+    rl.UnloadTexture(cursor)
+    rl.UnloadFont(font)
+    rl.UnloadRenderTexture(rtxr)
 
-  /* ========================= DE-INITIALIZATION ============================ */
-
-  rl.UnloadTexture(bliss)
-  rl.UnloadTexture(danta)
-  rl.UnloadTexture(dalila)
-
-  rl.UnloadRenderTexture(rtxr)
-
-  rl.CloseWindow()
+    rl.CloseWindow()
 }
