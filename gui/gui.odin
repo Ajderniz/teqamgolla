@@ -14,43 +14,59 @@ import rl   "vendor:raylib"
 
 import "core:fmt"
 
-ImageElement :: struct {
-  texture : rl.Texture,
-  resize  : enum { NONE, CENTER, STRETCH }
+ElementDimensions :: struct {
+  rec       : rl.Rectangle,
+  min_size  : rl.Vector2,
+  max_size  : rl.Vector2,
+  resizable : bool
 }
 
-StyleOptions :: struct {
+TextElement :: struct {
+  text       : string,
+  using dims : ElementDimensions
+}
+
+ImageElement :: struct {
+  texture    : rl.Texture,
+  resize     : enum { NONE, CENTER, STRETCH },
+  using dims : ElementDimensions
+}
+
+BoxElement :: struct {
+  header     : string,
+  content    : []union{ ^TextElement, ^ImageElement, ^BoxElement },
+  layout     : enum{ VERTICAL, HORIZONTAL },
+
+  using dims : ElementDimensions,
+
   style      : enum{ GLOBAL, CUSTOM },
   font       : rl.Font,
   pad        : f32,
   txt_color  : rl.Color,
-  line_color : rl.Color,
   bg_color   : rl.Color,
-  line_thick : f32
 }
 
-Box :: struct {
-  header              : string,
-  content             : []union{ string, ImageElement, ^Window },
-  layout              : enum{ VERTICAL, HORIZONTAL },
-  using style_options : StyleOptions
+MouseState :: enum {
+  DEFAULT,
+  DRAG,
+  RESIZE
 }
 
 Window :: struct {
-  rec       : rl.Rectangle,
+  draggable   : bool,
+  mouse_state : MouseState,
 
-  options   : bit_set[enum{ DRAGGABLE, RESIZABLE }],
-  drag_mode : enum{ NONE, DRAG, RESIZE },
-
-  using box : Box
+  using box   : BoxElement
 }
 
 @(private) g_font       : rl.Font
 @(private) g_pad        : f32
 @(private) g_txt_color  : rl.Color
-@(private) g_line_color : rl.Color
 @(private) g_bg_color   : rl.Color
+@(private) g_line_color : rl.Color
 @(private) g_line_thick : f32
+
+@(private) g_header_height: f32
 
 @(private)
 is_vector_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
@@ -126,6 +142,11 @@ draw_text :: proc(
     is_last_line := max_lines <= i
     if has_spaces && ok && !is_last_line
     {
+      if line[0] == ' '
+      {
+        str.substring_from(line, 1)
+      }
+
       limit := str.last_index_any(line, " \t\r\n")
       ko: bool // unused
       line, ko = str.substring_to(line, limit)
@@ -183,319 +204,364 @@ draw_text :: proc(
 }
 
 @(private)
-get_window_min_size :: proc(win: Window) -> rl.Vector2
+configure_box_min_size :: proc(box: ^BoxElement)
 {
-  min_width: f32
-  min_height: f32
+  if 0 < box.min_size.x && 0 < box.min_size.y
   {
-    font := .CUSTOM == win.style ? win.font : g_font
-    pad  := .CUSTOM == win.style ? win.pad  : g_pad
-
-    three_glyphs := f32(font.recs[0].width) * 3
-
-    for element in win.content
-    {
-      new_width:  f32
-      new_height: f32
-
-      switch e in element
-      {
-      case string:
-        new_width=.VERTICAL == win.layout? three_glyphs:min_width + three_glyphs
-        new_height = .VERTICAL == win.layout ? min_height + f32(font.baseSize) :
-                                               f32(font.baseSize)
-      case ImageElement:
-        txr_width  := f32(e.texture.width)
-        txr_height := f32(e.texture.width)
-        new_width = .VERTICAL == win.layout ? txr_width : min_width + txr_width
-        new_height=.VERTICAL == win.layout? min_height + txr_height : txr_height
-
-      case ^Window:
-        // TODO
-        win_size := get_window_min_size(e^)
-        new_width= .VERTICAL == win.layout ? win_size.x : min_width + win_size.x
-        new_height=.VERTICAL == win.layout? min_height + win_size.y : win_size.y
-      }
-
-      if .VERTICAL == win.layout
-      {
-        min_width  = min_width < new_width ? new_width : min_width
-        min_height = new_height
-      }
-      else
-      {
-        min_width  = new_width
-        min_height = min_height < new_height ? new_height : min_height
-      }
-      min_width  += pad
-      min_height += pad
-    }
-    min_width += pad
-    min_height += win.header != "" ? f32(g_font.baseSize) + (g_pad / 2) : 0
+    return
   }
 
-  win_size: rl.Vector2
-  win_size.x = win.rec.width  < min_width  ? min_width  : win.rec.width
-  win_size.y = win.rec.height < min_height ? min_height : win.rec.height
-  return win_size
+  min_size: rl.Vector2
+
+  pad  := (.CUSTOM == box.style) ? box.pad  : g_pad
+  font := (.CUSTOM == box.style) ? box.font : g_font
+
+  double_pad   := pad * 2
+  three_glyphs := f32(font.recs[0].width) * 3
+  font_height  := f32(font.baseSize)
+
+  for element, i in box.content
+  {
+    element_min_size: rl.Vector2
+    switch e in element
+    {
+    case ^TextElement:
+      e.min_size.x = (e.min_size.x < three_glyphs) ? three_glyphs : e.min_size.x
+      e.min_size.y = (e.min_size.y < font_height)  ? font_height  : e.min_size.y
+
+      element_min_size = e.min_size
+      element_min_size.x += (.VERTICAL == box.layout) ? double_pad : pad
+      element_min_size.y += (.VERTICAL == box.layout) ? pad        : double_pad
+
+    case ^ImageElement:
+      og_size: rl.Vector2 = { f32(e.texture.width), f32(e.texture.height) }
+      e.min_size.x = (e.min_size.x < og_size.x) ? og_size.x : e.min_size.x
+      e.min_size.y = (e.min_size.y < og_size.y) ? og_size.y : e.min_size.y
+
+      element_min_size = e.min_size
+      element_min_size.x += (.VERTICAL == box.layout) ? double_pad : pad
+      element_min_size.y += (.VERTICAL == box.layout) ? pad        : double_pad
+
+    case ^BoxElement:
+      configure_box_min_size(e)
+      element_min_size = e.min_size
+      element_min_size.x -= (.VERTICAL == box.layout) ? 0   : pad
+      element_min_size.y -= (.VERTICAL == box.layout) ? pad : 0
+    }
+
+    if .VERTICAL == box.layout
+    {
+      min_size.x=(min_size.x < element_min_size.x)?element_min_size.x:min_size.x
+      min_size.y += element_min_size.y
+    }
+    else
+    {
+      min_size.x += element_min_size.x
+      min_size.y=(min_size.y < element_min_size.y)?element_min_size.y:min_size.y
+    }
+  }
+  min_size.x += (.VERTICAL == box.layout) ? 0   : pad
+  min_size.y += (.VERTICAL == box.layout) ? pad : 0
+  min_size.y += (box.header != "") ? g_header_height : 0
+  box.min_size = min_size
 }
 
 @(private)
-draw_window :: proc(win: ^Window, highlight: bool)
+update_box_content_sizes :: proc(box: ^BoxElement)
 {
-  min_size := get_window_min_size(win^)
-  win.rec.width  = min_size.x
-  win.rec.height = min_size.y
+  IndexSizePair :: struct { index: int, size: f32 }
+  isp_list: [dynamic]IndexSizePair
+  defer delete(isp_list)
 
-  content_rec: rl.Rectangle = win.rec
-
-  if win.header != ""
-  {
-    txt_color := highlight ? rl.WHITE : g_txt_color
-    bg_color  := highlight ? rl.BLACK : g_bg_color
-
-    header_offset := f32(g_font.baseSize) + (g_pad / 2)
-
-    header_rec := win.rec
-    header_rec.height = header_offset
-    draw_rectangle_with_outline(header_rec, rl.BLACK, bg_color, 1)
-
-    draw_text(
-      {
-        header_rec.x + g_pad,
-        header_rec.y + g_pad * 0.25,
-        header_rec.width - (g_pad * 2),
-        header_rec.height
-      },
-      win.header,
-      g_font, txt_color)
-
-    content_rec.y += header_offset
-    content_rec.height -= header_offset
-  }
-
-  font       := .CUSTOM == win.style ? win.font       : g_font
-  pad        := .CUSTOM == win.style ? win.pad        : g_pad
-  txt_color  := .CUSTOM == win.style ? win.txt_color  : g_txt_color
-  line_color := .CUSTOM == win.style ? win.line_color : g_line_color
-  bg_color   := .CUSTOM == win.style ? win.bg_color   : g_bg_color
-  line_thick := .CUSTOM == win.style ? win.line_thick : g_line_thick
-
-  draw_rectangle_with_outline(content_rec, line_color, bg_color, line_thick)
-
-
-  half_pad := math.trunc(pad / 2)
+  pad := (.CUSTOM == box.style) ? box.pad : g_pad
   double_pad := pad * 2
 
-  txt_count: int
-  rec_count: int
+  box_count: int
 
-  txt_space: f32
-  rec_space: f32
-  rec_space_map: map[int]f32
-  defer delete(rec_space_map)
-
-  space_calculations:
+  for element, i in box.content
   {
-    IndexSpacePair :: struct{ index: int, space: f32 }
-    isp_list: [dynamic]IndexSpacePair
-    defer delete(isp_list)
-
-    for element, i in win.content
+    size: f32
+    switch e in element
     {
-      switch e in element
-      {
-      case string:
-        txt_count += 1
-
-      case ImageElement:
-
-        rec_count += 1
-
-        isp: IndexSpacePair = { i, pad }
-        isp.space += .VERTICAL == win.layout ? f32(e.texture.height) :
-                                               f32(e.texture.width)
-
-        append(&isp_list, isp)
-        rec_space += isp.space
-
-      case ^Window:
-        // TODO
-
-        rec_count += 1
-
-        isp: IndexSpacePair = { i, pad }
-        isp.space += .VERTICAL == win.layout ? min_size.x : min_size.y
-
-        append(&isp_list, isp)
-        rec_space += isp.space
-      }
+    case ^TextElement:
+      size =  (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
+      size += pad
+    case ^ImageElement:
+      size =  (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
+      size += pad
+    case ^BoxElement:
+      size =  (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
+      size -= pad
+      box_count += 1
     }
+    append(&isp_list, IndexSizePair{i, size})
+  }
+  sort.quick_sort_proc(
+    isp_list[:],
+    proc(left, right: IndexSizePair) -> int
     {
-      remainder := .VERTICAL == win.layout ? f32(content_rec.height) : 
-                                             f32(content_rec.width)
-      remainder -= (rec_space + pad)
-
-      if 0 < txt_count
+      if left.size < right.size
       {
-        txt_space = remainder
+        return 1
+      }
+      else if right.size < left.size
+      {
+        return -1
       }
       else
       {
-        rec_space += remainder
+        return 0
       }
-    }
+    })
 
-    if rec_count <= 0
+  remaining_elements := f32(len(box.content))
+
+  available_space: f32
+  if .VERTICAL == box.layout
+  {
+    available_space = box.rec.height
+    available_space -= (box.header != "") ? g_header_height : 0
+  }
+  else
+  {
+    available_space = box.rec.width
+  }
+  available_space -= (pad * (remaining_elements + 1)) -
+                     (double_pad * f32(box_count))
+
+  for isp in isp_list
+  {
+    share := math.trunc(available_space / remaining_elements)
+
+    used_space: f32
+    switch e in box.content[isp.index]
     {
-      break space_calculations
-    }
-
-    sort.quick_sort_proc(
-      isp_list[:], 
-      proc(left, right: IndexSpacePair) -> int
+    case ^TextElement:
+      if .VERTICAL == box.layout
       {
-        if left.space < right.space
-        {
-          return 1
-        }
-        else if right.space < left.space
-        {
-          return -1
-        }
-        else
-        {
-          return 0
-        }
-      })
+        e.rec.width = box.rec.width - double_pad
+        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+      }
+      else
+      {
+        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+        e.rec.height = box.rec.height - double_pad
+        e.rec.height -= (box.header != "") ? g_header_height : 0
+      }
+      if e.min_size.x <= e.max_size.x
+      {
+        e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
+      }
+      if e.min_size.y <= e.max_size.y
+      {
+        e.rec.height= (e.max_size.y < e.rec.height)? e.max_size.y:e.rec.height
+      }
+      used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
-    for &isp,i in isp_list
-    {
-      rec := win.content[isp.index].(ImageElement)
+    case ^ImageElement:
+      if .VERTICAL == box.layout
+      {
+        e.rec.width = box.rec.width - double_pad
+        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+      }
+      else
+      {
+        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+        e.rec.height = box.rec.height - double_pad
+        e.rec.height -= (box.header != "") ? g_header_height : 0
+      }
+      if e.min_size.x <= e.max_size.x
+      {
+        e.rec.width = (e.max_size.x < e.rec.width)? e.max_size.x : e.rec.width
+      }
+      if e.min_size.y <= e.max_size.y
+      {
+        e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y:e.rec.height
+      }
+      used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
-      space_portion := math.trunc(rec_space / f32(rec_count))
-      original_size := .VERTICAL == win.layout ?  f32(rec.texture.height) :
-                                                  f32(rec.texture.width)
-
-      new_size := space_portion < original_size ? original_size : space_portion
-
-      rec_space -= new_size
-      new_size -= pad
-
-      rec_space_map[isp.index] = new_size
-
-      rec_count -= 1
+    case ^BoxElement:
+      if .VERTICAL == box.layout
+      {
+        e.rec.width = box.rec.width
+        e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
+      }
+      else
+      {
+        e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
+        e.rec.height = box.rec.height
+        e.rec.height -= (box.header != "") ? g_header_height : 0
+      }
+      if e.min_size.x <= e.max_size.x
+      {
+        e.rec.width = (e.max_size.x < e.rec.width) ? e.max_size.x : e.rec.width
+      }
+      if e.min_size.y <= e.max_size.y
+      {
+        e.rec.height = (e.max_size.y < e.rec.height)?e.max_size.y : e.rec.height
+      }
+      used_space = (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
     }
+    available_space -= used_space
+    remaining_elements -= 1
+  }
+}
+
+@(private)
+draw_box :: proc(
+  box     : ^BoxElement,
+  rec     : rl.Rectangle,
+  options : bit_set[enum {HIGHLIGHT, UPDATE_SIZES, SUB_BOX}],
+  ) {
+  font := (.CUSTOM == box.style) ? box.font       : g_font
+  pad  := (.CUSTOM == box.style) ? box.pad        : g_pad
+  double_pad := pad * 2
+
+  // HEADER ====================================================================
+
+  header_offset: f32
+  if box.header != ""
+  {
+    header_offset = g_header_height
+    header_rec := rec
+    header_rec.height = header_offset
+
+    bg_color := (.HIGHLIGHT in options) ? rl.BLACK : rl.WHITE
+    rl.DrawRectangleRec(header_rec, bg_color)
+    rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_line_color)
+
+    font_color := (.HIGHLIGHT in options) ? rl.WHITE : rl.BLACK
+    header_rec.x += pad
+    header_rec.y += math.trunc(pad * 0.25)
+    header_rec.width -= double_pad
+    draw_text(header_rec, box.header, font, font_color)
   }
 
-  element_offset: f32
+  // CONTENT ===================================================================
 
-  for element, i in win.content
+  if .UPDATE_SIZES in options
   {
-    pre_pad  := 0 == i                      ? pad : half_pad
-    post_pad := (len(win.content) - 1) <= i ? pad : half_pad
+    update_box_content_sizes(box)
+  }
 
-    element_rec := content_rec
+  txt_color  := (.CUSTOM == box.style) ? box.txt_color  : g_txt_color
+  bg_color   := (.CUSTOM == box.style) ? box.bg_color   : g_bg_color
 
-    element_rec.x += 
-      (.VERTICAL == win.layout) ? pad : element_offset + pre_pad
-    element_rec.y +=
-      (.VERTICAL == win.layout) ? element_offset + pre_pad : pad
+  content_rec        := rec
+  content_rec.y      += header_offset
+  content_rec.height -= header_offset
 
-    element_offset += pre_pad
+  rl.DrawRectangleRec(content_rec, bg_color)
 
+  content_offset: f32
+  for element, i in box.content
+  {
     switch e in element
     {
-      case string:
+    case ^TextElement:
+      if .VERTICAL == box.layout
+      {
+        e.rec.x =  box.rec.x + pad
+        e.rec.y =  box.rec.y + header_offset + content_offset + pad
+        content_offset += pad + e.rec.height
+      }
+      else
+      {
+        e.rec.x = box.rec.x + content_offset + pad
+        e.rec.y = box.rec.y + header_offset + pad
+        content_offset += pad + e.rec.width
+      }
+      draw_text(e.rec, e.text, font, txt_color)
 
-        if .VERTICAL == win.layout
-        {
-          element_rec.width -= double_pad
+    case ^ImageElement:
+      if .VERTICAL == box.layout
+      {
+        e.rec.x = box.rec.x + pad
+        e.rec.y = box.rec.y + header_offset + content_offset + pad
+        content_offset += pad + e.rec.height
+      }
+      else
+      {
+        e.rec.x = box.rec.x + content_offset + pad
+        e.rec.y = box.rec.y + header_offset + pad
+        content_offset += pad + e.rec.width
+      }
+      switch e.resize
+      {
+      case .NONE:
+        rl.DrawTextureV(e.texture, {e.rec.x, e.rec.y}, rl.WHITE)
+      case .CENTER:
+        rl.DrawTextureV(
+          e.texture,
+          {
+            e.rec.x + (e.rec.width - f32(e.texture.width)) / 2,
+            e.rec.y + (e.rec.height - f32(e.texture.height)) / 2
+          },
+          rl.WHITE)
+      case .STRETCH:
+        rl.DrawTexturePro(
+          e.texture,
+          { 0, 0, f32(e.texture.width), f32(e.texture.height) },
+          e.rec,
+          { 0, 0 },
+          0,
+          rl.WHITE)
+      }
 
-          element_rec.height = math.trunc(txt_space / f32(txt_count))
-          element_rec.height -= pad
-
-          element_offset += element_rec.height
-        }
-        else
-        {
-          element_rec.width = math.trunc(txt_space / f32(txt_count))
-          element_rec.width -= pad
-
-          element_rec.height -= double_pad
-
-          element_offset += element_rec.width
-        }
-
-        draw_text(element_rec, e, font, txt_color)
-
-      case ImageElement:
-
-        if .VERTICAL == win.layout
-        {
-          element_rec.width -= double_pad
-          element_rec.height = rec_space_map[i]
-
-          element_offset += f32(element_rec.height)
-        }
-        else
-        {
-          element_rec.width = rec_space_map[i]
-          element_rec.height -= double_pad
-
-          element_offset += f32(element_rec.width)
-        }
-
-        switch e.resize
-        {
-        case .NONE:
-
-          rl.DrawTextureV(e.texture, {element_rec.x, element_rec.y}, rl.WHITE)
-
-        case .CENTER:
-
-          center_pos: rl.Vector2 = {
-            element_rec.x + ((element_rec.width - f32(e.texture.width)) / 2),
-            element_rec.y + ((element_rec.height - f32(e.texture.height)) / 2)
-          }
-          rl.DrawTextureV(e.texture, center_pos, rl.WHITE)
-
-        case .STRETCH:
-
-          rl.DrawTexturePro(
-            e.texture,
-            { 0, 0, f32(e.texture.width), f32(e.texture.height) },
-            element_rec,
-            { 0, 0 },
-            0,
-            rl.WHITE)
-        }
-
-      case ^Window:
-
-        // TODO
-        element_rec.x -= pad
-        element_rec.y -= pad
-
+    case ^BoxElement:
+      if .VERTICAL == box.layout
+      {
+        e.rec.x = box.rec.x
+        e.rec.y = box.rec.y + header_offset + content_offset
+        e.rec.y -= (i != 0) ? pad : 0
+        content_offset += e.rec.height
+      }
+      else
+      {
+        e.rec.x = box.rec.x + content_offset
+        e.rec.x -= (i != 0) ? pad : 0
+        e.rec.y = box.rec.y + header_offset
+        content_offset += e.rec.width
+      }
+      draw_box(e, e.rec, {.UPDATE_SIZES, .SUB_BOX})
     }
-    element_offset += post_pad
   }
+}
+
+@(private)
+draw_window :: proc(win: ^Window, highlight: bool, update_sizes: bool)
+{
+  configure_box_min_size(&win.box)
+  win.rec.width =(win.rec.width  < win.min_size.x)? win.min_size.x:win.rec.width
+  win.rec.height=(win.rec.height < win.min_size.y)?win.min_size.y:win.rec.height
+  if win.min_size.x < win.max_size.x
+  {
+    win.rec.width =(win.max_size.x<win.rec.width) ? win.max_size.x:win.rec.width
+  }
+  if win.min_size.y < win.max_size.y
+  {
+    win.rec.height=(win.max_size.y<win.rec.height)?win.max_size.x:win.rec.height
+  }
+  draw_box(&win.box, win.rec, {.HIGHLIGHT, .UPDATE_SIZES})
+  rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_line_color)
 }
 
 init :: proc(
   font       :  rl.Font,
-  pad    : f32 = 12,
-  txt_color  := rl.WHITE,
-  line_color := rl.WHITE,
-  bg_color   := rl.BLACK,
+  pad        : f32 = 12,
+  txt_color  := rl.BLACK,
+  line_color := rl.BLACK,
+  bg_color   := rl.WHITE,
   line_thick : f32 = 1,
 ) {
   g_font       = font
-  g_pad    = pad
+  g_pad        = pad
   g_txt_color  = txt_color
   g_line_color = line_color
   g_bg_color   = bg_color
   g_line_thick = line_thick
+
+  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }
 
 move_window_index_to_index :: proc(
@@ -529,20 +595,24 @@ move_window_index_to_index :: proc(
   list[dst_index] = win
 }
 
-draw_window_list :: proc(list: []^Window)
+update_window_list :: proc(
+  list: []^Window,
+  mouse_pos: rl.Vector2,
+  scale: int
+  ) -> MouseState
 {
   @(static) mouse_offset: rl.Vector2
 
-  mouse_pos := rl.GetMousePosition()
+  mouse_state: MouseState
 
   new_top_index := -1
   outer: for win, i in list
   {
     reset := false
 
-    mode: switch win.drag_mode
+    mode: switch win.mouse_state
     {
-    case .NONE:
+    case .DEFAULT:
       if !is_vector_within_rectangle(mouse_pos, win.rec)
       {
         continue
@@ -565,23 +635,25 @@ draw_window_list :: proc(list: []^Window)
         button_pressed = .RIGHT
       }
 
-      if .DRAGGABLE in win.options && .LEFT == button_pressed
+      if win.draggable && .LEFT == button_pressed
       {
-        rl.SetMouseCursor(.RESIZE_ALL)
+        //rl.SetMouseCursor(.RESIZE_ALL)
+        mouse_state = .DRAG
         mouse_offset = {
           (mouse_pos.x - win.rec.x), 
           (mouse_pos.y - win.rec.y)
         }
-        win.drag_mode = .DRAG
+        win.mouse_state = .DRAG
       } 
-      else if .RESIZABLE in win.options && .RIGHT == button_pressed
+      else if win.dims.resizable && .RIGHT == button_pressed
       {
         rl.SetMousePosition(
-          i32(win.rec.x + win.rec.width),
-          i32(win.rec.y + win.rec.height)
+          i32(win.rec.x + win.rec.width) * i32(scale),
+          i32(win.rec.y + win.rec.height) * i32(scale)
           )
-        rl.SetMouseCursor(.RESIZE_NWSE)
-        win.drag_mode = .RESIZE
+        //rl.SetMouseCursor(.RESIZE_NWSE)
+        mouse_state = .RESIZE
+        win.mouse_state = .RESIZE
       }
       else if .LEFT == button_pressed || .RIGHT == button_pressed
       {
@@ -594,6 +666,7 @@ draw_window_list :: proc(list: []^Window)
     case .DRAG:
       if rl.IsMouseButtonDown(.LEFT)
       {
+        mouse_state = .DRAG
         win.rec.x = mouse_pos.x - mouse_offset.x
         win.rec.y = mouse_pos.y - mouse_offset.y
       }
@@ -604,6 +677,7 @@ draw_window_list :: proc(list: []^Window)
     case .RESIZE:
       if rl.IsMouseButtonDown(.RIGHT)
       {
+        mouse_state = .RESIZE
         win.rec.width = mouse_pos.x - win.rec.x
         win.rec.height = mouse_pos.y - win.rec.y
       }
@@ -614,8 +688,9 @@ draw_window_list :: proc(list: []^Window)
     }
     if reset
     {
-      rl.SetMouseCursor(.DEFAULT)
-      win.drag_mode = .NONE
+      //rl.SetMouseCursor(.DEFAULT)
+      mouse_state = .DEFAULT
+      win.mouse_state = .DEFAULT
       continue
     }
     new_top_index = i != 0 ? i : -1
@@ -625,9 +700,18 @@ draw_window_list :: proc(list: []^Window)
   {
     move_window_index_to_index(list, u32(new_top_index), 0)
   }
+  return mouse_state
+}
 
+draw_window_list :: proc(list: []^Window)
+{
+  @(static) first_time := true
   #reverse for win, i in list
   {
-    draw_window(win, 0 == i)
+    draw_window(win, 0 == i, .RESIZE == win.mouse_state || first_time)
+  }
+  if first_time
+  {
+    first_time = false
   }
 }
