@@ -56,8 +56,6 @@ Window :: struct {
   draggable   : bool,
   mouse_state : MouseState,
 
-  base_unit   : rl.Vector2,
-
   using box   : BoxElement
 }
 
@@ -71,7 +69,8 @@ DrawBoxOptions :: bit_set[enum {HIGHLIGHT, UPDATE_SIZES, SUB_BOX}]
 @(private) g_line_color : rl.Color
 @(private) g_line_thick : f32
 
-@(private) g_header_height: f32
+@(private) g_header_height : f32
+@(private) g_base_unit     : rl.Vector2
 
 @(private)
 is_vector_within_rectangle :: proc(v2: rl.Vector2, rec: rl.Rectangle) -> bool
@@ -331,7 +330,8 @@ update_box_content_sizes :: proc(box: ^BoxElement)
     case ^TextElement:
       if !e.non_resizable
       {
-        if .VERTICAL == box.layout {
+        if .VERTICAL == box.layout
+        {
           e.rec.width = box.rec.width - double_pad
           e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
         }
@@ -562,12 +562,12 @@ draw_window :: proc(win: ^Window, highlight: bool, update_sizes: bool)
     win.rec.height=(win.max_size.y<win.rec.height)?win.max_size.x:win.rec.height
   }
 
-  if 1 < win.base_unit.x && 1 < win.base_unit.y
+  if 1 < g_base_unit.x && 1 < g_base_unit.y
   {
-    win.rec.x -= f32(int(win.rec.x) % int(win.base_unit.x))
-    win.rec.y -= f32(int(win.rec.y) % int(win.base_unit.y))
-    win.rec.width -= f32(int(win.rec.width) % int(win.base_unit.x))
-    win.rec.height -= f32(int(win.rec.height) % int(win.base_unit.y))
+    win.rec.x -= f32(int(win.rec.x) % int(g_base_unit.x))
+    win.rec.y -= f32(int(win.rec.y) % int(g_base_unit.y))
+    win.rec.width -= f32(int(win.rec.width) % int(g_base_unit.x))
+    win.rec.height -= f32(int(win.rec.height) % int(g_base_unit.y))
   }
 
   options := (highlight) ? DrawBoxOptions{.HIGHLIGHT} : {}
@@ -583,6 +583,7 @@ init :: proc(
   line_color := rl.BLACK,
   bg_color   := rl.WHITE,
   line_thick : f32 = 1,
+  base_unit  : rl.Vector2 = { 1, 1 }
 ) {
   g_font       = font
   g_pad        = pad
@@ -590,6 +591,7 @@ init :: proc(
   g_line_color = line_color
   g_bg_color   = bg_color
   g_line_thick = line_thick
+  g_base_unit  = base_unit
 
   g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }

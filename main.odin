@@ -68,7 +68,7 @@ main :: proc()
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
   font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
-  gui.init(font) 
+  gui.init(font, base_unit=4) 
 
   cursor := rl.LoadTexture("res/img/cursor.png")
 
