@@ -91,17 +91,6 @@ are_rectangles_overlapping :: proc(
 }
 
 @(private)
-draw_rectangle_with_outline :: proc(
-  rec        : rl.Rectangle,
-  line_color : rl.Color,
-  bg_color   : rl.Color,
-  line_thick : f32
-) {
-  rl.DrawRectangleRec(rec, bg_color)
-  rl.DrawRectangleLinesEx(rec, line_thick, line_color)
-}
-
-@(private)
 draw_text :: proc(
   rec       : rl.Rectangle,
   txt       : string,
@@ -143,14 +132,12 @@ draw_text :: proc(
       break
     }
 
+    line = str.trim_left_space(line)
+
     has_spaces := str.contains_any(line, " \t\r\n")
     is_last_line := max_lines <= i
     if has_spaces && ok && !is_last_line
     {
-      if line[0] == ' '
-      {
-        str.substring_from(line, 1)
-      }
 
       limit := str.last_index_any(line, " \t\r\n")
       ko: bool // unused
