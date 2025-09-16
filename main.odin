@@ -22,7 +22,7 @@ import "core:fmt"
 NAT_SCR_W :: 640
 NAT_SCR_H :: (NAT_SCR_W / 4) * 3
 
-SCALE :: 2
+SCALE :: 1
 SCR_W :: NAT_SCR_W * SCALE
 SCR_H :: NAT_SCR_H * SCALE
 
@@ -131,6 +131,10 @@ main :: proc()
     mpos := rl.GetMousePosition()
     mpos.x = math.trunc(mpos.x / SCALE)
     mpos.y = math.trunc(mpos.y / SCALE)
+    mpos.x = (mpos.x < 0) ? 0 : mpos.x
+    mpos.y = (mpos.y < 0) ? 0 : mpos.y
+    mpos.x = (NAT_SCR_W < mpos.x) ? NAT_SCR_W : mpos.x
+    mpos.y = (NAT_SCR_H < mpos.y) ? NAT_SCR_H : mpos.y
 
     if rl.IsKeyPressed(.TAB)
     {
