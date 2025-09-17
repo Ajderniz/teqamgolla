@@ -136,18 +136,6 @@ main :: proc()
     mpos.x = (NAT_SCR_W < mpos.x) ? NAT_SCR_W : mpos.x
     mpos.y = (NAT_SCR_H < mpos.y) ? NAT_SCR_H : mpos.y
 
-    if rl.IsKeyPressed(.TAB)
-    {
-      if rl.IsKeyDown(.LEFT_SHIFT)
-      {
-        gui.move_window_index_to_index(wlist, 0, u32(len(wlist) - 1))
-      }
-      else
-      {
-        gui.move_window_index_to_index(wlist, u32(len(wlist) - 1), 0)
-      }
-    }
-
     mstate: gui.MouseState
 
     rl.BeginTextureMode(rtxr)

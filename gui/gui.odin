@@ -240,6 +240,19 @@ configure_box_min_size :: proc(element: ^Element)
   three_glyphs := f32(font.recs[0].width) * 3
   font_height  := f32(font.baseSize)
 
+  if len(box.content) <= 0 {
+    bare_min: rl.Vector2
+
+    bare_min.x =  (box.header != "") ? three_glyphs : font.recs[0].width
+    bare_min.x += double_pad
+
+    bare_min.y =  font_height + double_pad
+    bare_min.y += (box.header != "") ? g_header_height : 0
+
+    element.min_size = bare_min
+    return
+  }
+
   for e, i in box.content
   {
     switch d in e.data
@@ -566,26 +579,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   rl.DrawRectangleLinesEx(win.emt.rec, g_line_thick, g_line_color)
 }
 
-init :: proc(
-  font       :  rl.Font,
-  pad        : f32 = 12,
-  txt_color  := rl.BLACK,
-  line_color := rl.BLACK,
-  bg_color   := rl.WHITE,
-  line_thick : f32 = 1,
-  base_unit  : rl.Vector2 = { 1, 1 }
-) {
-  g_font       = font
-  g_pad        = pad
-  g_txt_color  = txt_color
-  g_line_color = line_color
-  g_bg_color   = bg_color
-  g_line_thick = line_thick
-  g_base_unit  = base_unit
-
-  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
-}
-
+@(private)
 move_window_index_to_index :: proc(
   list  : []^Window,
   src_index : u32,
@@ -617,12 +611,44 @@ move_window_index_to_index :: proc(
   list[dst_index] = win
 }
 
+init :: proc(
+  font       :  rl.Font,
+  pad        : f32 = 12,
+  txt_color  := rl.BLACK,
+  line_color := rl.BLACK,
+  bg_color   := rl.WHITE,
+  line_thick : f32 = 1,
+  base_unit  : rl.Vector2 = { 1, 1 }
+) {
+  g_font       = font
+  g_pad        = pad
+  g_txt_color  = txt_color
+  g_line_color = line_color
+  g_bg_color   = bg_color
+  g_line_thick = line_thick
+  g_base_unit  = base_unit
+
+  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
+}
+
 update_window_list :: proc(
   list: []^Window,
   mouse_pos: rl.Vector2,
   scale: int
   ) -> MouseState
 {
+  if rl.IsKeyPressed(.TAB)
+  {
+    if rl.IsKeyDown(.LEFT_SHIFT)
+    {
+      move_window_index_to_index(list, 0, u32(len(list) - 1))
+    }
+    else
+    {
+      move_window_index_to_index(list, u32(len(list) - 1), 0)
+    }
+  }
+
   @(static) mouse_offset: rl.Vector2
 
   mouse_state: MouseState
