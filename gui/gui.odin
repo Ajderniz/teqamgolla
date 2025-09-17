@@ -372,8 +372,8 @@ update_box_content_sizes :: proc(element: ^Element)
 }
 
 @(private)
-draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false) {
-
+draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
+{
   font := (.CUSTOM == box.style) ? box.font       : g_font
   pad  := (.CUSTOM == box.style) ? box.pad        : g_pad
   double_pad := pad * 2
@@ -421,20 +421,53 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false) {
     switch d in e.data
     {
     case string, ImageElement:
-      e.rec.x += pad
-      e.rec.y += pad
-      content_offset += pad
-
-    case BoxElement:
+      must_add_pad := false
+      if 0 == i
+      {
+        must_add_pad = true
+      }
+      else if 1 <= i
+      {
+        #partial switch pd in box.content[i-1].data
+        {
+        case string, ImageElement:
+          must_add_pad = true
+        }
+      }
       if .VERTICAL == box.layout
       {
-        e.rec.y -= (i != 0) ? pad : 0
+        e.rec.x += pad
+        e.rec.y += (must_add_pad) ? pad : 0
       }
       else
       {
-        e.rec.x -= (i != 0) ? pad : 0
+        e.rec.x += (must_add_pad) ? pad : 0
+        e.rec.y += pad
       }
+      content_offset += (must_add_pad) ? pad : 0
+
+    case BoxElement:
+      if 1 <= i
+      {
+        #partial switch d in box.content[i-1].data
+        {
+        case BoxElement:
+          e.rec.y -= (.VERTICAL == box.layout) ? pad : 0
+          e.rec.x -= (.VERTICAL == box.layout) ? 0   : pad
+        }
+      }
+      /*
+      if .VERTICAL == box.layout
+      {
+        e.rec.y -= (0 < i) ? pad : 0
+      }
+      else
+      {
+        e.rec.x -= (0 < i) ? pad : 0
+      }
+      */
     }
+    content_offset += (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
     switch d in e.data
     {
@@ -467,8 +500,6 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false) {
     case BoxElement:
       draw_box(d, e.rec)
     }
-
-    content_offset += (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
   }
 }
 

@@ -110,7 +110,7 @@ main :: proc()
     emt=&gui.Element {
       data=gui.BoxElement{
         header="HEADER",
-        content={&box1, &box2},
+        content={&box1, &txt2},
         layout=.HORIZONTAL,
       }
     }
