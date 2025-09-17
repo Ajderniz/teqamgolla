@@ -77,44 +77,46 @@ main :: proc()
 
   rl.SetTargetFPS(FPS)
 
-  txt1 := gui.TextElement {
-    txt="3D-printed construct marketing industrial grade physical footage military-grade augmented reality paranoid free-market long-chain hydrocarbons refrigerator decay Chiba film RAF urban. Nano-DIY singularity lights knife crypto-sprawl rebar. Tokyo Shibuya lights ablative Legba post-girl realism military-grade rebar hacker industrial grade shanty town cardboard. Soul-delay vinyl office nodality table tower concrete crypto-math-kanji Legba tiger-team film stimulate bridge. Footage physical tube augmented reality narrative car beef noodles film numinous systemic cardboard BASE jump receding. 8-bit franchise alcohol sub-orbital post-saturation point semiotics tower bridge drone uplink face forwards chrome. Disposable wonton soup ablative film cardboard decay systema futurity paranoid smart-gang. ",
-    dims={min_size={100, 0}}
+  txt1 := gui.Element{
+    data="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into math-warehouse papier-mache boy shoes."
   }
 
-  txt2 := gui.TextElement {
-    txt="Fetishism footage nano-denim soul-delay city post-tattoo sprawl Chiba. Grenade dome voodoo god realism augmented reality narrative euro-pop denim face forwards hacker. Katana network Chiba dissident denim man city uplink towards faded skyscraper market paranoid. Augmented reality digital bicycle sentient tube spook industrial grade physical franchise. Savant franchise tattoo chrome dome systemic pen long-chain hydrocarbons post-shanty town. Camera systema grenade nodality Tokyo neural bicycle DIY. Savant silent beef noodles Tokyo marketing courier order-flow skyscraper free-market sprawl advert meta-motion wonton soup smart-disposable hacker. Free-market 8-bit boy Chiba narrative garage paranoid shanty town digital camera footage. Network fluidity BASE jump advert Kowloon RAF range-rover pre-neural rebar convenience store. "
+  txt2 := gui.Element{
+    data="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative."
   }
 
-  img1 := gui.ImageElement {
-    texture=danta,
-    resize=.NONE,
+  img := gui.Element{
+    data=gui.ImageElement{
+      texture=danta,
+      resize=.STRETCH
+    }
   }
 
-  img2 := gui.ImageElement {
-    texture=danta,
-    resize=.STRETCH
+  box1 := gui.Element{
+    data=gui.BoxElement{
+      header="BOX1",
+      content={&txt1, &img}
+    }
   }
 
-  box1 := gui.BoxElement {
-    content={&txt2, &img1},
-    layout=.HORIZONTAL,
-    header="BOX1"
-  }
-
-  box2 := gui.BoxElement {
-    content={&txt1, &img2},
-    header="BOX2"
+  box2 := gui.Element{
+    data=gui.BoxElement{
+      header="BOX2",
+      content={&txt2}
+    }
   }
 
   win: gui.Window = {
     draggable=true,
-    header="HEADER",
-    content={&box2, &box1},
-    layout=.HORIZONTAL,
+
+    emt=&gui.Element {
+      data=gui.BoxElement{
+        header="HEADER",
+        content={&box1, &box2},
+        layout=.HORIZONTAL,
+      }
+    }
   }
-  win.box.rec.x = 10
-  win.box.rec.y = 10
 
   wlist := []^gui.Window{ 
     &win
