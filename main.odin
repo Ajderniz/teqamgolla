@@ -26,9 +26,7 @@ SCALE :: 1
 SCR_W :: NAT_SCR_W * SCALE
 SCR_H :: NAT_SCR_H * SCALE
 
-FPS       :: 60
-VFPS      :: 60
-VFPS_FREQ :: FPS / VFPS
+FPS       :: 20
 
 
 main :: proc()
@@ -150,20 +148,15 @@ main :: proc()
       }
     }
 
-    vfps_counter = (vfps_counter + 1) % VFPS_FREQ
-
     mstate: gui.MouseState
 
     rl.BeginTextureMode(rtxr)
 
+      rl.DrawTexture(bliss, 0, 0, rl.WHITE)
+
       mstate = gui.update_window_list(wlist, mpos, SCALE)
-      if (0 == vfps_counter)
-      {
-        rl.DrawTexture(bliss, 0, 0, rl.WHITE)
+      gui.draw_window_list(wlist)
 
-        gui.draw_window_list(wlist)
-
-      }
       mpos = rl.GetMousePosition()
       mpos.x = math.trunc(mpos.x / SCALE)
       mpos.y = math.trunc(mpos.y / SCALE)
