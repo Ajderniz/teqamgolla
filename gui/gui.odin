@@ -105,6 +105,8 @@ draw_text :: proc(
 
   txt_needs_ellipsis := true
   start := 0
+
+  //i := str.count(txt, "\n")
   for i := 1; i <= max_lines; i += 1
   {
     end := start + max_cols
@@ -131,8 +133,17 @@ draw_text :: proc(
     is_last_line := max_lines <= i
     if has_spaces && ok && !is_last_line
     {
+      limit: int
+      if str.contains_any(line, "\r\n")
+      {
+        limit = str.index_any(line, "\r\n")
+        i += 1
+      }
+      else
+      {
+        limit = str.last_index_any(line, " \t")
+      }
 
-      limit := str.last_index_any(line, " \t\r\n")
       ko: bool // unused
       line, ko = str.substring_to(line, limit)
 
@@ -143,8 +154,26 @@ draw_text :: proc(
     }
     else if is_last_line
     {
-      ko: bool
-      line, ko = str.substring_to(line, str.rune_count(line) - 3)
+      ko: bool // unused
+      must_reduce_three := false
+
+      if str.contains_any(line, "\r\n")
+      {
+        limit := str.index_any(line, "\r\n")
+        limit -= len(line) - str.rune_count(line)
+        line, ko = str.substring_to(line, limit)
+
+        must_reduce_three = ((max_cols-3) < str.rune_count(line)) ? true : false
+      }
+      else
+      {
+        must_reduce_three = true
+      }
+
+      if must_reduce_three
+      {
+        line, ko = str.substring_to(line, str.rune_count(line) - 3)
+      }
     }
     if 0 < len(line)
     {
