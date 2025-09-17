@@ -125,6 +125,7 @@ draw_text :: proc(
     }
 
     line = str.trim_left_space(line)
+    line = str.trim_right_space(line)
 
     has_spaces := str.contains_any(line, " \t\r\n")
     is_last_line := max_lines <= i
@@ -456,16 +457,6 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
           e.rec.x -= (.VERTICAL == box.layout) ? 0   : pad
         }
       }
-      /*
-      if .VERTICAL == box.layout
-      {
-        e.rec.y -= (0 < i) ? pad : 0
-      }
-      else
-      {
-        e.rec.x -= (0 < i) ? pad : 0
-      }
-      */
     }
     content_offset += (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
 
@@ -518,6 +509,14 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   min_size := win.emt.min_size
   max_size := win.emt.max_size
 
+  if 2 <= g_base_unit.x && 2 <= g_base_unit.y
+  {
+    rec.x      -= f32(int(rec.x)      % int(g_base_unit.x))
+    rec.y      -= f32(int(rec.y)      % int(g_base_unit.y))
+    rec.width  -= f32(int(rec.width)  % int(g_base_unit.x))
+    rec.height -= f32(int(rec.height) % int(g_base_unit.y))
+  }
+
   rec.width  = (rec.width < min_size.x)  ? min_size.x : rec.width
   rec.height = (rec.height < min_size.y) ? min_size.y : rec.height
 
@@ -528,14 +527,6 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   if min_size.y < max_size.y
   {
     rec.height = (max_size.y < rec.height) ? max_size.x : rec.height
-  }
-
-  if 1 < g_base_unit.x && 1 < g_base_unit.y
-  {
-    rec.x      -= f32(int(rec.x)      % int(g_base_unit.x))
-    rec.y      -= f32(int(rec.y)      % int(g_base_unit.y))
-    rec.width  -= f32(int(rec.width)  % int(g_base_unit.x))
-    rec.height -= f32(int(rec.height) % int(g_base_unit.y))
   }
 
   if update_sizes
