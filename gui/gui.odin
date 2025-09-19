@@ -20,19 +20,18 @@ ImageElement :: struct {
 }
 
 BoxElement :: struct {
-  header     : string,
-  content    : []^Element,
-  layout     : enum{ VERTICAL, HORIZONTAL },
+  header   : string,
+  content  : []^Element,
+  layout   : enum{ VERTICAL, HORIZONTAL },
 
-  style      : enum{ GLOBAL, CUSTOM },
-  font       : rl.Font,
-  pad        : f32,
-  txt_color  : rl.Color,
-  bg_color   : rl.Color,
+  font     : ^rl.Font,
+  pad      : ^f32,
+  fg_color : ^rl.Color,
+  bg_color : ^rl.Color,
 }
 
 Element :: struct {
-  data       : union { string, ImageElement, BoxElement },
+  data          : union { string, ImageElement, BoxElement },
 
   rec           : rl.Rectangle,
   min_size      : rl.Vector2,
@@ -40,31 +39,33 @@ Element :: struct {
   non_resizable : bool
 }
 
-MouseState :: enum {
-  DEFAULT,
+ActionState :: enum {
+  NONE,
+  POTENTIAL,
   DRAG,
-  RESIZE
+  RESIZE,
 }
 
 Window :: struct {
-  draggable   : bool,
-  mouse_state : MouseState,
+  draggable : bool,
+  act_state : ActionState,
 
-  emt         : ^Element
+  emt       : ^Element
 }
+
+@(private) g_act_state  : ActionState
 
 @(private) g_font       : rl.Font
 @(private) g_pad        : f32
-@(private) g_txt_color  : rl.Color
+@(private) g_fg_color   : rl.Color
 @(private) g_bg_color   : rl.Color
-@(private) g_line_color : rl.Color
 @(private) g_line_thick : f32
 
 @(private) g_header_height : f32
 @(private) g_base_unit     : rl.Vector2
 
 @(private)
-is_vector_within_rectangle :: #force_inline proc(
+is_v2_within_rec :: #force_inline proc(
   v2: rl.Vector2,
   rec: rl.Rectangle) -> bool
 {
@@ -84,20 +85,21 @@ are_rectangles_overlapping :: #force_inline proc(
 
 @(private)
 draw_text :: proc(
-  rec       : rl.Rectangle,
-  txt       : string,
-  font      : rl.Font,
-  txt_color : rl.Color
+  rec      : rl.Rectangle,
+  txt      : string,
+  font     : rl.Font,
+  fg_color : rl.Color,
   ) {
-  max_cols: int
-  max_lines: int
-  {
-    max_cols = int(math.trunc(rec.width / font.recs[0].width))
 
-    glyph_pad := f32(font.glyphPadding) / 2
-    max_height := rec.height + glyph_pad
+  max_glyphs: rl.Vector2
+  {
+    max_glyphs.x = math.trunc(rec.width / font.recs[0].width)
+
+    glyph_pad    := f32(font.glyphPadding) / 2
+    max_height   := rec.height + glyph_pad
     glyph_height := f32(font.baseSize) + glyph_pad
-    max_lines = int(math.trunc(max_height / glyph_height))
+
+    max_glyphs.y = math.trunc(max_height / glyph_height)
   }
 
   lines := [dynamic]string{}
@@ -106,10 +108,9 @@ draw_text :: proc(
   txt_needs_ellipsis := true
   start := 0
 
-  //i := str.count(txt, "\n")
-  for i := 1; i <= max_lines; i += 1
+  for i := 1; i <= int(max_glyphs.y); i += 1
   {
-    end := start + max_cols
+    end := start + int(max_glyphs.x)
     line: string
     ok: bool
 
@@ -130,7 +131,7 @@ draw_text :: proc(
     line = str.trim_right_space(line)
 
     has_spaces := str.contains_any(line, " \t\r\n")
-    is_last_line := max_lines <= i
+    is_last_line := int(max_glyphs.y) <= i
     if has_spaces && ok && !is_last_line
     {
       limit: int
@@ -163,7 +164,7 @@ draw_text :: proc(
         limit -= len(line) - str.rune_count(line)
         line, ko = str.substring_to(line, limit)
 
-        must_reduce_three = ((max_cols-3) < str.rune_count(line)) ? true : false
+        must_reduce_three=(int(max_glyphs.x-3)< str.rune_count(line))?true:false
       }
       else
       {
@@ -182,16 +183,16 @@ draw_text :: proc(
     start = has_spaces ? end + 1 : end
   }
 
-  if max_cols <= 3
+  if max_glyphs.x <= 3
   {
     length := len(lines)
     if 0 < length
     {
-      lines[length - 1] = "..."
+      lines[length - 1] = "~"
     } 
     else
     {
-      append(&lines, "...")
+      append(&lines, "~")
     }
     txt_needs_ellipsis = false
   }
@@ -200,7 +201,7 @@ draw_text :: proc(
   if txt_needs_ellipsis
   {
     old_txt := printed_txt
-    printed_txt = str.join({printed_txt, "..."}, "")
+    printed_txt = str.join({printed_txt, "~"}, "")
     delete(old_txt)
   }
   printed_msg_cstring := str.clone_to_cstring(printed_txt)
@@ -213,7 +214,7 @@ draw_text :: proc(
     {rec.x, rec.y},
     cast(f32)g_font.baseSize,
     0,
-    txt_color,
+    fg_color,
   )
 }
 
@@ -233,18 +234,17 @@ configure_box_min_size :: proc(element: ^Element)
 
   min_size: rl.Vector2
 
-  pad  := (.CUSTOM == box.style) ? box.pad  : g_pad
-  font := (.CUSTOM == box.style) ? box.font : g_font
+  pad  := (box.pad  != nil) ? box.pad^  : g_pad
+  font := (box.font != nil) ? box.font^ : g_font
 
-  double_pad   := pad * 2
-  three_glyphs := f32(font.recs[0].width) * 3
-  font_height  := f32(font.baseSize)
+  double_pad  := pad * 2
+  glyph_width  := f32(font.recs[0].width)
+  font_height := f32(font.baseSize)
 
   if len(box.content) <= 0 {
     bare_min: rl.Vector2
 
-    bare_min.x =  (box.header != "") ? three_glyphs : font.recs[0].width
-    bare_min.x += double_pad
+    bare_min.x = glyph_width + double_pad
 
     bare_min.y =  font_height + double_pad
     bare_min.y += (box.header != "") ? g_header_height : 0
@@ -258,8 +258,8 @@ configure_box_min_size :: proc(element: ^Element)
     switch d in e.data
     {
     case string:
-      e.min_size.x = (e.min_size.x < three_glyphs) ? three_glyphs : e.min_size.x
-      e.min_size.y = (e.min_size.y < font_height)  ? font_height  : e.min_size.y
+      e.min_size.x = (e.min_size.x < glyph_width)  ? glyph_width  : e.min_size.x
+      e.min_size.y = (e.min_size.y < font_height) ? font_height : e.min_size.y
 
     case ImageElement:
       og_size: rl.Vector2 = { f32(d.texture.width), f32(d.texture.height) }
@@ -313,7 +313,7 @@ update_box_content_sizes :: proc(element: ^Element)
   isp_list: [dynamic]IndexSizePair
   defer delete(isp_list)
 
-  pad := (.CUSTOM == box.style) ? box.pad : g_pad
+  pad := (box.pad != nil) ? box.pad^ : g_pad
   double_pad := pad * 2
 
   box_count: int
@@ -417,8 +417,11 @@ update_box_content_sizes :: proc(element: ^Element)
 @(private)
 draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
 {
-  font := (.CUSTOM == box.style) ? box.font       : g_font
-  pad  := (.CUSTOM == box.style) ? box.pad        : g_pad
+  font     := (box.font     != nil) ? box.font^     : g_font
+  pad      := (box.pad      != nil) ? box.pad^      : g_pad
+  fg_color := (box.fg_color != nil) ? box.fg_color^ : g_fg_color
+  bg_color := (box.bg_color != nil) ? box.bg_color^ : g_bg_color
+
   double_pad := pad * 2
 
   // HEADER ====================================================================
@@ -430,21 +433,19 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
     header_rec := rec
     header_rec.height = header_offset
 
-    bg_color := highlight ? rl.BLACK : rl.WHITE
-    rl.DrawRectangleRec(header_rec, bg_color)
-    rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_line_color)
+    header_bg_color := (highlight) ? fg_color : bg_color
+    header_fg_color := (highlight) ? bg_color : fg_color
 
-    font_color := highlight ? rl.WHITE : rl.BLACK
+    rl.DrawRectangleRec(header_rec, header_bg_color)
+    rl.DrawRectangleLinesEx(header_rec, g_line_thick, header_bg_color)
+
     header_rec.x += pad
     header_rec.y += math.trunc(pad * 0.25)
     header_rec.width -= double_pad
-    draw_text(header_rec, box.header, font, font_color)
+    draw_text(header_rec, box.header, font, header_fg_color)
   }
 
   // CONTENT ===================================================================
-
-  txt_color  := (.CUSTOM == box.style) ? box.txt_color : g_txt_color
-  bg_color   := (.CUSTOM == box.style) ? box.bg_color  : g_bg_color
 
   content_rec        := rec
   content_rec.y      += header_offset
@@ -505,7 +506,7 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
     switch d in e.data
     {
     case string:
-      draw_text(e.rec, d, font, txt_color)
+      draw_text(e.rec, d, font, fg_color)
 
     case ImageElement:
       switch d.resize
@@ -576,7 +577,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     update_box_content_sizes(win.emt)
   }
   draw_box(win.emt.data.(BoxElement), win.emt.rec, highlight)
-  rl.DrawRectangleLinesEx(win.emt.rec, g_line_thick, g_line_color)
+  rl.DrawRectangleLinesEx(win.emt.rec, g_line_thick, g_fg_color)
 }
 
 @(private)
@@ -614,16 +615,14 @@ move_window_index_to_index :: proc(
 init :: proc(
   font       :  rl.Font,
   pad        : f32 = 12,
-  txt_color  := rl.BLACK,
-  line_color := rl.BLACK,
+  fg_color  := rl.BLACK,
   bg_color   := rl.WHITE,
   line_thick : f32 = 1,
   base_unit  : rl.Vector2 = { 1, 1 }
 ) {
   g_font       = font
   g_pad        = pad
-  g_txt_color  = txt_color
-  g_line_color = line_color
+  g_fg_color  = fg_color
   g_bg_color   = bg_color
   g_line_thick = line_thick
   g_base_unit  = base_unit
@@ -631,11 +630,11 @@ init :: proc(
   g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }
 
-update_window_list :: proc(
+process_window_list_input :: proc(
   list: []^Window,
   mouse_pos: rl.Vector2,
   scale: int
-  ) -> MouseState
+  )
 {
   if rl.IsKeyPressed(.TAB)
   {
@@ -651,23 +650,23 @@ update_window_list :: proc(
 
   @(static) mouse_offset: rl.Vector2
 
-  mouse_state: MouseState
-
   new_top_index := -1
   outer: for win, i in list
   {
-    reset := false
+    must_reset_state := false
 
-    mode: switch win.mouse_state
+    g_act_state = (is_v2_within_rec(mouse_pos, win.emt.rec))? .POTENTIAL : .NONE
+
+    action: #partial switch win.act_state
     {
-    case .DEFAULT:
-      if !is_vector_within_rectangle(mouse_pos, win.emt.rec)
+    case .NONE, .POTENTIAL:
+      if g_act_state != .POTENTIAL
       {
         continue
       }
       for j in 0..<i
       {
-        if is_vector_within_rectangle(mouse_pos, list[j].emt.rec)
+        if is_v2_within_rec(mouse_pos, list[j].emt.rec)
         {
           continue outer
         }
@@ -685,12 +684,12 @@ update_window_list :: proc(
 
       if win.draggable && .LEFT == button_pressed
       {
-        mouse_state = .DRAG
+        g_act_state = .DRAG
         mouse_offset = {
           (mouse_pos.x - win.emt.rec.x), 
           (mouse_pos.y - win.emt.rec.y)
         }
-        win.mouse_state = .DRAG
+        win.act_state = .DRAG
       } 
       else if !win.emt.non_resizable && .RIGHT == button_pressed
       {
@@ -698,8 +697,8 @@ update_window_list :: proc(
           i32(win.emt.rec.x + win.emt.rec.width) * i32(scale),
           i32(win.emt.rec.y + win.emt.rec.height) * i32(scale)
           )
-        mouse_state = .RESIZE
-        win.mouse_state = .RESIZE
+        g_act_state = .RESIZE
+        win.act_state = .RESIZE
       }
       else if .LEFT == button_pressed || .RIGHT == button_pressed
       {
@@ -710,32 +709,29 @@ update_window_list :: proc(
         continue
       }
     case .DRAG:
-      if rl.IsMouseButtonDown(.LEFT)
+      if !rl.IsMouseButtonDown(.LEFT)
       {
-        mouse_state = .DRAG
-        win.emt.rec.x = mouse_pos.x - mouse_offset.x
-        win.emt.rec.y = mouse_pos.y - mouse_offset.y
+        must_reset_state = true
+        break
       }
-      else
-      {
-        reset = true
-      }
+      g_act_state = .DRAG
+      win.emt.rec.x = mouse_pos.x - mouse_offset.x
+      win.emt.rec.y = mouse_pos.y - mouse_offset.y
+
     case .RESIZE:
-      if rl.IsMouseButtonDown(.RIGHT)
+      if !rl.IsMouseButtonDown(.RIGHT)
       {
-        mouse_state = .RESIZE
-        win.emt.rec.width = mouse_pos.x - win.emt.rec.x
-        win.emt.rec.height = mouse_pos.y - win.emt.rec.y
+        must_reset_state = true
+        break
       }
-      else
-      {
-        reset = true
-      }
+      g_act_state = .RESIZE
+      win.emt.rec.width = mouse_pos.x - win.emt.rec.x
+      win.emt.rec.height = mouse_pos.y - win.emt.rec.y
     }
-    if reset
+    if must_reset_state
     {
-      mouse_state = .DEFAULT
-      win.mouse_state = .DEFAULT
+      g_act_state = (g_act_state != .POTENTIAL) ? .NONE : .POTENTIAL
+      win.act_state = .NONE
       continue
     }
     new_top_index = i != 0 ? i : -1
@@ -745,7 +741,6 @@ update_window_list :: proc(
   {
     move_window_index_to_index(list, u32(new_top_index), 0)
   }
-  return mouse_state
 }
 
 draw_window_list :: proc(list: []^Window)
@@ -753,10 +748,15 @@ draw_window_list :: proc(list: []^Window)
   @(static) first_time := true
   #reverse for win, i in list
   {
-    draw_window(win, 0 == i, .RESIZE == win.mouse_state || first_time)
+    draw_window(win, 0 == i, .RESIZE == win.act_state || first_time)
   }
   if first_time
   {
     first_time = false
   }
+}
+
+get_action_state :: #force_inline proc() -> ActionState
+{
+  return g_act_state
 }

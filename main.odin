@@ -22,11 +22,11 @@ import "core:fmt"
 NAT_SCR_W :: 640
 NAT_SCR_H :: (NAT_SCR_W / 4) * 3
 
-SCALE :: 1
+SCALE :: 2
 SCR_W :: NAT_SCR_W * SCALE
 SCR_H :: NAT_SCR_H * SCALE
 
-FPS       :: 20
+FPS   :: 20
 
 
 main :: proc()
@@ -65,10 +65,25 @@ main :: proc()
 
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
-  font := rl.LoadFontEx("res/fonts/Px437_DOS-V_re_ANK16.ttf", 16, nil, 0)
+  font: rl.Font
+  {
+    codepoint_count: i32
+    codepoints := rl.LoadCodepoints(
+      "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20!\"#$%&'()*+,-./0123456789:;<>=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}~\x7F\xA0¡¿ÁÉÍÑÓÚÜáéíñóúü\x00",
+      &codepoint_count)
+
+    font = rl.LoadFontEx(
+      "res/fonts/Px437_DOS-V_re_ANK16.ttf",
+      16,
+      codepoints,
+      codepoint_count)
+
+    rl.UnloadCodepoints(codepoints)
+  }
+
   gui.init(font, base_unit=4) 
 
-  cursor := rl.LoadTexture("res/img/cursor.png")
+  cursor_txr := rl.LoadTexture("res/img/cursor.png")
 
   bliss := rl.LoadTexture("res/img/bliss.jpg")
   danta := rl.LoadTexture("res/img/danta.png")
@@ -136,27 +151,34 @@ main :: proc()
     mpos.x = (NAT_SCR_W < mpos.x) ? NAT_SCR_W : mpos.x
     mpos.y = (NAT_SCR_H < mpos.y) ? NAT_SCR_H : mpos.y
 
-    mstate: gui.MouseState
-
     rl.BeginTextureMode(rtxr)
 
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
-      mstate = gui.update_window_list(wlist, mpos, SCALE)
+      gui.process_window_list_input(wlist, mpos, SCALE)
       gui.draw_window_list(wlist)
 
-      mpos = rl.GetMousePosition()
-      mpos.x = math.trunc(mpos.x / SCALE)
-      mpos.y = math.trunc(mpos.y / SCALE)
-      switch mstate
+      cursor_txr_offset: f32 = 0
+      cursor_pos := rl.GetMousePosition()
+      cursor_pos.x = math.trunc(cursor_pos.x / SCALE)
+      cursor_pos.y = math.trunc(cursor_pos.y / SCALE)
+      #partial switch gui.get_action_state()
       {
-      case .DEFAULT:
-        rl.DrawTextureRec(cursor, { 0, 0, 16, 16}, mpos, rl.WHITE)
+      case .POTENTIAL:
+        cursor_txr_offset = 16
+        cursor_pos -= 8
       case .DRAG:
-        rl.DrawTextureRec(cursor, {16, 0, 16, 16}, mpos - 8, rl.WHITE)
+        cursor_txr_offset = 32
+        cursor_pos -= 8
       case .RESIZE:
-        rl.DrawTextureRec(cursor, {32, 0, 16, 16}, mpos - 16, rl.WHITE)
+        cursor_txr_offset = 48
+        cursor_pos -= 16
       }
+      rl.DrawTextureRec(
+        cursor_txr,
+        { cursor_txr_offset, 0, 16, 16 },
+        cursor_pos,
+        rl.WHITE)
 
     rl.EndTextureMode()
 
@@ -173,7 +195,7 @@ main :: proc()
   }
     rl.UnloadTexture(danta)
     rl.UnloadTexture(bliss)
-    rl.UnloadTexture(cursor)
+    rl.UnloadTexture(cursor_txr)
     rl.UnloadFont(font)
     rl.UnloadRenderTexture(rtxr)
 
