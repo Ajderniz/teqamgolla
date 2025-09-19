@@ -156,7 +156,7 @@ draw_text :: proc(
     else if is_last_line
     {
       ko: bool // unused
-      must_reduce_three := false
+      must_reduce_one := false
 
       if str.contains_any(line, "\r\n")
       {
@@ -164,16 +164,16 @@ draw_text :: proc(
         limit -= len(line) - str.rune_count(line)
         line, ko = str.substring_to(line, limit)
 
-        must_reduce_three=(int(max_glyphs.x-3)< str.rune_count(line))?true:false
+        must_reduce_one=(int(max_glyphs.x-3)< str.rune_count(line))?true:false
       }
       else
       {
-        must_reduce_three = true
+        must_reduce_one = true
       }
 
-      if must_reduce_three
+      if must_reduce_one
       {
-        line, ko = str.substring_to(line, str.rune_count(line) - 3)
+        line, ko = str.substring_to(line, str.rune_count(line) - 1)
       }
     }
     if 0 < len(line)
@@ -437,7 +437,7 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
     header_fg_color := (highlight) ? bg_color : fg_color
 
     rl.DrawRectangleRec(header_rec, header_bg_color)
-    rl.DrawRectangleLinesEx(header_rec, g_line_thick, header_bg_color)
+    rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_fg_color)
 
     header_rec.x += pad
     header_rec.y += math.trunc(pad * 0.25)
