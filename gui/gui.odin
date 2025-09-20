@@ -94,9 +94,9 @@ are_rectangles_overlapping :: #force_inline proc(
 
 @(private)
 scroll_text_element_under_mouse :: proc(
-  element: ^Element,
-  mouse_pos: rl.Vector2,
-  dir: enum{UP, DOWN}
+  element   : ^Element,
+  mouse_pos : rl.Vector2,
+  dir       : enum{UP, DOWN}
   ) -> bool
 {
   if !is_v2_within_rec(mouse_pos, element.rec)
@@ -113,6 +113,7 @@ scroll_text_element_under_mouse :: proc(
     else
     {
       limit := len(d.buffer) - int(d.glyph_size.y)
+      //limit += (0 < d.offset) ? 1 : 0
       limit =  (limit < 0) ? 0 : limit
       d.offset += (d.offset < uint(limit)) ? 1 : 0
     }
@@ -217,17 +218,50 @@ draw_text_element :: proc(
   ) {
   start := txte.offset
   end   := txte.offset + uint(txte.glyph_size.y)
-  end   =  (uint(len(txte.buffer)) < end) ? len(txte.buffer) : end
+
+  {
+    center := rec.x + math.trunc(rec.width / 2)
+    half_font_width := f32(font.recs[0].width / 2)
+
+    if 0 < txte.offset
+    {
+      start += 1
+
+      plus_height := rec.y + f32(font.baseSize)
+      rl.DrawTriangle(
+        {center,                   rec.y},
+        {center - half_font_width, plus_height},
+        {center + half_font_width, plus_height},
+        fg_color
+        )
+    }
+    if end < uint(len(txte.buffer))
+    {
+      end -= 1
+
+      after_text := rec.y + rec.height - f32(font.baseSize)
+      rl.DrawTriangle(
+        {center + half_font_width, after_text},
+        {center - half_font_width, after_text},
+        {center,                   after_text + f32(font.baseSize)},
+        fg_color
+        )
+    }
+  }
+  end = (uint(len(txte.buffer)) < end) ? len(txte.buffer) : end
 
   joined_txt := str.join(txte.buffer[start:end], "\n")
   joined_txt_cstring := str.clone_to_cstring(joined_txt)
   defer delete(joined_txt)
   defer delete(joined_txt_cstring)
 
+  txt_pos := rl.Vector2{rec.x, rec.y}
+  txt_pos.y += (0 < txte.offset)?f32(font.baseSize)+f32(font.glyphPadding/2) : 0
+
   rl.DrawTextEx(
     font,
     joined_txt_cstring,
-    {rec.x, rec.y},
+    txt_pos,
     f32(font.baseSize),
     0,
     fg_color)
@@ -297,14 +331,14 @@ configure_box_min_size :: proc(element: ^Element)
 
   double_pad  := pad * 2
   glyph_width  := f32(font.recs[0].width)
-  font_height := f32(font.baseSize)
+  glyph_height := f32(font.baseSize + (font.glyphPadding / 2))
 
   if len(box.content) <= 0 {
     bare_min: rl.Vector2
 
     bare_min.x = glyph_width + double_pad
 
-    bare_min.y =  font_height + double_pad
+    bare_min.y =  glyph_height + double_pad
     bare_min.y += (box.header != "") ? g_header_height : 0
 
     element.min_size = bare_min
@@ -317,7 +351,7 @@ configure_box_min_size :: proc(element: ^Element)
     {
     case TextElement:
       e.min_size.x = (e.min_size.x < glyph_width)  ? glyph_width  : e.min_size.x
-      e.min_size.y = (e.min_size.y < font_height) ? font_height : e.min_size.y
+      e.min_size.y=(e.min_size.y<(glyph_height*3))?(glyph_height*3):e.min_size.y
 
     case ImageElement:
       og_size: rl.Vector2 = { f32(d.texture.width), f32(d.texture.height) }
