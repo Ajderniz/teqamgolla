@@ -62,7 +62,6 @@ main :: proc()
 
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
 
-
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
 
   font: rl.Font
@@ -91,12 +90,18 @@ main :: proc()
   rl.SetTargetFPS(FPS)
 
   txt1 := gui.Element{
-    data="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into math-warehouse papier-mache boy shoes."
+    data=gui.TextElement{
+      txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into math-warehouse papier-mache boy shoes."
+    }
   }
+  defer gui.delete_text_element(&txt1.data.(gui.TextElement))
 
   txt2 := gui.Element{
-    data="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative."
+    data=gui.TextElement{
+      txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative."
+        }
   }
+  defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
   img := gui.Element{
     data=gui.ImageElement{

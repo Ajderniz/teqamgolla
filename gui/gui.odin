@@ -6,17 +6,26 @@
 
 package gui
 
+import      "core:c"
 import      "core:math"
 import sort "core:sort"
 import str  "core:strings"
 
 import rl   "vendor:raylib"
 
+
 import "core:fmt"
 
+TextElement :: struct {
+  txt        : string,
+  buffer     : [dynamic]string,
+  glyph_size : rl.Vector2,
+  offset     : uint
+}
+
 ImageElement :: struct {
-  texture    : rl.Texture,
-  resize     : enum { NONE, CENTER, STRETCH },
+  texture : rl.Texture,
+  resize  : enum { NONE, CENTER, STRETCH },
 }
 
 BoxElement :: struct {
@@ -31,7 +40,7 @@ BoxElement :: struct {
 }
 
 Element :: struct {
-  data          : union { string, ImageElement, BoxElement },
+  data          : union { TextElement, ImageElement, BoxElement },
 
   rec           : rl.Rectangle,
   min_size      : rl.Vector2,
@@ -84,55 +93,89 @@ are_rectangles_overlapping :: #force_inline proc(
 }
 
 @(private)
-draw_text :: proc(
-  rec      : rl.Rectangle,
-  txt      : string,
-  font     : rl.Font,
-  fg_color : rl.Color,
-  ) {
-
-  max_glyphs: rl.Vector2
+scroll_text_element_under_mouse :: proc(
+  element: ^Element,
+  mouse_pos: rl.Vector2,
+  dir: enum{UP, DOWN}
+  ) -> bool
+{
+  if !is_v2_within_rec(mouse_pos, element.rec)
   {
-    max_glyphs.x = math.trunc(rec.width / font.recs[0].width)
+    return false
+  }
+  #partial switch &d in element.data
+  {
+  case TextElement:
+    if .UP == dir
+    {
+      d.offset -= (0 < d.offset) ? 1 : 0
+    }
+    else
+    {
+      limit := len(d.buffer) - int(d.glyph_size.y)
+      limit =  (limit < 0) ? 0 : limit
+      d.offset += (d.offset < uint(limit)) ? 1 : 0
+    }
+    return true
+
+  case BoxElement:
+    for e in d.content
+    {
+      scrolled := scroll_text_element_under_mouse(e, mouse_pos, dir)
+      if scrolled
+      {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+@(private)
+update_text_element_buffer :: proc(
+  txte : ^TextElement,
+  rec  : rl.Rectangle,
+  font : rl.Font
+  ) {
+  {
+    txte.glyph_size.x = math.trunc(rec.width / font.recs[0].width)
 
     glyph_pad    := f32(font.glyphPadding) / 2
     max_height   := rec.height + glyph_pad
     glyph_height := f32(font.baseSize) + glyph_pad
 
-    max_glyphs.y = math.trunc(max_height / glyph_height)
+    txte.glyph_size.y = math.trunc(max_height / glyph_height)
   }
 
-  lines := [dynamic]string{}
-  defer delete(lines)
+  if txte.buffer != nil
+  {
+    clear(&txte.buffer)
+  }
 
-  txt_needs_ellipsis := true
   start := 0
 
-  for i := 1; i <= int(max_glyphs.y); i += 1
+  for i := 1;; i += 1
   {
-    end := start + int(max_glyphs.x)
+    end := start + int(txte.glyph_size.x)
     line: string
     ok: bool
 
-    if end < (str.rune_count(txt) - 1)
+    if end < (str.rune_count(txte.txt) - 1)
     {
-      line, ok = str.substring(txt, start, end)
+      line, ok = str.substring(txte.txt, start, end)
     }
     else
     {
-      end = str.rune_count(txt)
-      line, ok = str.substring(txt, start, end)
-      append(&lines, line)
-      txt_needs_ellipsis = false
+      end = str.rune_count(txte.txt)
+      line, ok = str.substring(txte.txt, start, end)
+      append(&txte.buffer, line)
       break
     }
 
-    line = str.trim_left_space(line)
-    line = str.trim_right_space(line)
+    line = str.trim_space(line)
 
     has_spaces := str.contains_any(line, " \t\r\n")
-    is_last_line := int(max_glyphs.y) <= i
-    if has_spaces && ok && !is_last_line
+    if has_spaces && ok
     {
       limit: int
       if str.contains_any(line, "\r\n")
@@ -153,69 +196,84 @@ draw_text :: proc(
 
       end = start + limit
     }
-    else if is_last_line
-    {
-      ko: bool // unused
-      must_reduce_one := false
-
-      if str.contains_any(line, "\r\n")
-      {
-        limit := str.index_any(line, "\r\n")
-        limit -= len(line) - str.rune_count(line)
-        line, ko = str.substring_to(line, limit)
-
-        must_reduce_one=(int(max_glyphs.x-3)< str.rune_count(line))?true:false
-      }
-      else
-      {
-        must_reduce_one = true
-      }
-
-      if must_reduce_one
-      {
-        line, ko = str.substring_to(line, str.rune_count(line) - 1)
-      }
-    }
     if 0 < len(line)
     {
-      append(&lines, line)
+      append(&txte.buffer, line)
     }
-    start = has_spaces ? end + 1 : end
+    start = (has_spaces) ? (end + 1) : end
   }
+  offset_limit := len(txte.buffer) - int(txte.glyph_size.y)
+  offset_limit =  (offset_limit < 0) ? 0 : offset_limit
+  txte.offset = (uint(offset_limit) < txte.offset) ? uint(offset_limit) :
+                                                     txte.offset
+}
 
-  if max_glyphs.x <= 3
-  {
-    length := len(lines)
-    if 0 < length
-    {
-      lines[length - 1] = "~"
-    } 
-    else
-    {
-      append(&lines, "~")
-    }
-    txt_needs_ellipsis = false
-  }
+@(private)
+draw_text_element :: proc(
+  txte     : TextElement,
+  rec      : rl.Rectangle,
+  font     : rl.Font,
+  fg_color : rl.Color
+  ) {
+  start := txte.offset
+  end   := txte.offset + uint(txte.glyph_size.y)
+  end   =  (uint(len(txte.buffer)) < end) ? len(txte.buffer) : end
 
-  printed_txt := str.join(lines[:], "\n")
-  if txt_needs_ellipsis
-  {
-    old_txt := printed_txt
-    printed_txt = str.join({printed_txt, "~"}, "")
-    delete(old_txt)
-  }
-  printed_msg_cstring := str.clone_to_cstring(printed_txt)
-  defer delete(printed_txt)
-  defer delete(printed_msg_cstring)
+  joined_txt := str.join(txte.buffer[start:end], "\n")
+  joined_txt_cstring := str.clone_to_cstring(joined_txt)
+  defer delete(joined_txt)
+  defer delete(joined_txt_cstring)
 
   rl.DrawTextEx(
     font,
-    printed_msg_cstring,
+    joined_txt_cstring,
     {rec.x, rec.y},
-    cast(f32)g_font.baseSize,
+    f32(font.baseSize),
     0,
-    fg_color,
-  )
+    fg_color)
+}
+
+@(private)
+draw_label :: proc(
+  txt       : string,
+  pos       : rl.Vector2,
+  max_width : f32,
+  font      : rl.Font,
+  fg_color  : rl.Color,
+  ) {
+
+  len      := str.rune_count(txt)
+  max_cols := int(math.trunc(max_width / font.recs[0].width))
+
+  ok: bool
+  line: string
+  must_add_tilde := (max_cols < len)
+  if must_add_tilde
+  {
+    line, ok = str.substring_to(txt, max_cols - 1)
+  }
+  else
+  {
+    line, ok = str.substring_to(txt, len)
+  }
+
+  line_cstring := str.clone_to_cstring(line)
+  defer delete(line_cstring)
+
+  if must_add_tilde
+  {
+    rl.DrawTextEx(
+      font,
+      rl.TextFormat("%s~", line_cstring),
+      pos,
+      f32(font.baseSize),
+      0,
+      fg_color)
+  }
+  else
+  {
+    rl.DrawTextEx(font, line_cstring, pos, f32(font.baseSize), 0, fg_color)
+  }
 }
 
 @(private)
@@ -223,7 +281,7 @@ configure_box_min_size :: proc(element: ^Element)
 {
   #partial switch d in element.data
   {
-  case string, ImageElement:
+  case TextElement, ImageElement:
     return
   }
   if 0 < element.min_size.x && 0 < element.min_size.y
@@ -257,7 +315,7 @@ configure_box_min_size :: proc(element: ^Element)
   {
     switch d in e.data
     {
-    case string:
+    case TextElement:
       e.min_size.x = (e.min_size.x < glyph_width)  ? glyph_width  : e.min_size.x
       e.min_size.y = (e.min_size.y < font_height) ? font_height : e.min_size.y
 
@@ -273,7 +331,7 @@ configure_box_min_size :: proc(element: ^Element)
     this_min_size := e.min_size
     switch d in e.data
     {
-    case string, ImageElement:
+    case TextElement, ImageElement:
       this_min_size.x += (.VERTICAL == box.layout) ? double_pad : pad
       this_min_size.y += (.VERTICAL == box.layout) ? pad        : double_pad
 
@@ -304,7 +362,7 @@ update_box_content_sizes :: proc(element: ^Element)
 {
   #partial switch d in element.data
   {
-  case string, ImageElement:
+  case TextElement, ImageElement:
     return
   }
   box := element.data.(BoxElement)
@@ -323,7 +381,7 @@ update_box_content_sizes :: proc(element: ^Element)
     size := (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
     switch d in e.data
     {
-    case string, ImageElement:
+    case TextElement, ImageElement:
       size += pad
     case BoxElement:
       size -= pad
@@ -393,7 +451,7 @@ update_box_content_sizes :: proc(element: ^Element)
 
     switch d in e.data
     {
-    case string, ImageElement:
+    case TextElement, ImageElement:
       e.rec.width  -= (.VERTICAL == box.layout) ? double_pad : 0
       e.rec.height -= (.VERTICAL == box.layout) ? 0 : double_pad
     case BoxElement:
@@ -407,6 +465,12 @@ update_box_content_sizes :: proc(element: ^Element)
     if e.min_size.y <= e.max_size.y
     {
       e.rec.height = (e.max_size.y < e.rec.height) ? e.max_size.y : e.rec.height
+    }
+
+    #partial switch &d in e.data
+    {
+    case TextElement:
+      update_text_element_buffer(&d, e.rec, ((box.font!=nil)?box.font^:g_font))
     }
 
     available_space -= (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
@@ -442,7 +506,12 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
     header_rec.x += pad
     header_rec.y += math.trunc(pad * 0.25)
     header_rec.width -= double_pad
-    draw_text(header_rec, box.header, font, header_fg_color)
+    draw_label(
+      box.header,
+      {header_rec.x, header_rec.y},
+      header_rec.width,
+      font,
+      header_fg_color)
   }
 
   // CONTENT ===================================================================
@@ -464,7 +533,7 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
 
     switch d in e.data
     {
-    case string, ImageElement:
+    case TextElement, ImageElement:
       must_add_pad := false
       if 0 == i
       {
@@ -474,7 +543,7 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
       {
         #partial switch pd in box.content[i-1].data
         {
-        case string, ImageElement:
+        case TextElement, ImageElement:
           must_add_pad = true
         }
       }
@@ -505,8 +574,8 @@ draw_box :: proc(box : BoxElement, rec: rl.Rectangle, highlight := false)
 
     switch d in e.data
     {
-    case string:
-      draw_text(e.rec, d, font, fg_color)
+    case TextElement:
+      draw_text_element(d, e.rec, font, fg_color)
 
     case ImageElement:
       switch d.resize
@@ -542,7 +611,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 {
   #partial switch d in win.emt.data
   {
-  case string, ImageElement:
+  case TextElement, ImageElement:
     return
   }
 
@@ -583,10 +652,10 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 @(private)
 move_window_index_to_index :: proc(
   list  : []^Window,
-  src_index : u32,
-  dst_index : u32
+  src_index : uint,
+  dst_index : uint 
   ) {
-  cap := u32(len(list) - 1)
+  cap := uint(len(list) - 1)
   if cap < src_index || cap < dst_index
   {
     return
@@ -630,6 +699,11 @@ init :: proc(
   g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }
 
+delete_text_element :: #force_inline proc(element: ^TextElement)
+{
+  delete(element.buffer)
+}
+
 process_window_list_input :: proc(
   list: []^Window,
   mouse_pos: rl.Vector2,
@@ -640,11 +714,11 @@ process_window_list_input :: proc(
   {
     if rl.IsKeyDown(.LEFT_SHIFT)
     {
-      move_window_index_to_index(list, 0, u32(len(list) - 1))
+      move_window_index_to_index(list, 0, uint(len(list) - 1))
     }
     else
     {
-      move_window_index_to_index(list, u32(len(list) - 1), 0)
+      move_window_index_to_index(list, uint(len(list) - 1), 0)
     }
   }
 
@@ -671,6 +745,8 @@ process_window_list_input :: proc(
           continue outer
         }
       }
+
+      wheel_move := rl.GetMouseWheelMove()
 
       button_pressed := rl.MouseButton.BACK
       if rl.IsMouseButtonPressed(.LEFT)
@@ -699,6 +775,17 @@ process_window_list_input :: proc(
           )
         g_act_state = .RESIZE
         win.act_state = .RESIZE
+      }
+      else if wheel_move != 0
+      {
+        if wheel_move < 0
+        {
+          scroll_text_element_under_mouse(win.emt, mouse_pos, .DOWN)
+        }
+        else
+        {
+          scroll_text_element_under_mouse(win.emt, mouse_pos, .UP)
+        }
       }
       else if .LEFT == button_pressed || .RIGHT == button_pressed
       {
@@ -734,12 +821,12 @@ process_window_list_input :: proc(
       win.act_state = .NONE
       continue
     }
-    new_top_index = i != 0 ? i : -1
+    new_top_index = (i != 0) ? i : -1
     break
   }
   if 0 < new_top_index
   {
-    move_window_index_to_index(list, u32(new_top_index), 0)
+    move_window_index_to_index(list, uint(new_top_index), 0)
   }
 }
 
