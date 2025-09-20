@@ -93,43 +93,29 @@ are_rectangles_overlapping :: #force_inline proc(
 }
 
 @(private)
-scroll_text_element_under_mouse :: proc(
-  element   : ^Element,
-  mouse_pos : rl.Vector2,
-  dir       : enum{UP, DOWN}
-  ) -> bool
+get_element_under_mouse :: proc(
+  element: ^Element,
+  mouse_pos: rl.Vector2) -> ^Element
 {
   if !is_v2_within_rec(mouse_pos, element.rec)
   {
-    return false
+    return nil
   }
-  #partial switch &d in element.data
+  switch d in element.data
   {
-  case TextElement:
-    if .UP == dir
-    {
-      d.offset -= (0 < d.offset) ? 1 : 0
-    }
-    else
-    {
-      limit := len(d.buffer) - int(d.glyph_size.y)
-      //limit += (0 < d.offset) ? 1 : 0
-      limit =  (limit < 0) ? 0 : limit
-      d.offset += (d.offset < uint(limit)) ? 1 : 0
-    }
-    return true
-
+  case TextElement, ImageElement:
+    return element
   case BoxElement:
     for e in d.content
     {
-      scrolled := scroll_text_element_under_mouse(e, mouse_pos, dir)
-      if scrolled
+      hovered := get_element_under_mouse(e, mouse_pos)
+      if hovered != nil
       {
-        return true
+        return hovered
       }
     }
   }
-  return false
+  return nil
 }
 
 @(private)
@@ -765,7 +751,7 @@ process_window_list_input :: proc(
 
     g_act_state = (is_v2_within_rec(mouse_pos, win.emt.rec))? .POTENTIAL : .NONE
 
-    action: #partial switch win.act_state
+    action: switch win.act_state
     {
     case .NONE, .POTENTIAL:
       if g_act_state != .POTENTIAL
@@ -812,13 +798,24 @@ process_window_list_input :: proc(
       }
       else if wheel_move != 0
       {
-        if wheel_move < 0
+        element := get_element_under_mouse(win.emt, mouse_pos)
+        if nil == element
         {
-          scroll_text_element_under_mouse(win.emt, mouse_pos, .DOWN)
+          break
         }
-        else
+        #partial switch &d in element.data
         {
-          scroll_text_element_under_mouse(win.emt, mouse_pos, .UP)
+        case TextElement:
+          if wheel_move < 0
+          {
+            limit := len(d.buffer) - int(d.glyph_size.y)
+            limit =  (limit < 0) ? 0 : limit
+            d.offset += (d.offset < uint(limit)) ? 1 : 0
+          }
+          else
+          {
+            d.offset -= (0 < d.offset) ? 1 : 0
+          }
         }
       }
       else if .LEFT == button_pressed || .RIGHT == button_pressed
