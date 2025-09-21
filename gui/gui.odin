@@ -15,10 +15,11 @@ import str  "core:strings"
 import rl   "vendor:raylib"
 
 TextElement :: struct {
-  txt        : string,
-  buffer     : [dynamic]string,
-  glyph_size : rl.Vector2,
-  offset     : uint
+  txt         : string,
+  buffer      : [dynamic]string,
+  glyph_size  : rl.Vector2,
+  offset      : uint,
+  scroll_type : enum { VERTICAL, PAGED }
 }
 
 ImageElement :: struct {
@@ -60,7 +61,9 @@ CursorState :: enum {
   DRAG,
   RESIZE,
   SCROLL_UP,
-  SCROLL_DOWN
+  SCROLL_DOWN,
+  PAGE_PREV,
+  PAGE_NEXT
 }
 
 Window :: struct {
@@ -127,17 +130,37 @@ get_element_under_mouse :: proc(
 }
 
 @(private)
-scroll_text_element :: proc(txte: ^TextElement, dir: enum{UP, DOWN})
+scroll_text_element :: proc(txte: ^TextElement, dir: enum{PREV, NEXT})
 {
-  if .DOWN == dir
+  if .VERTICAL == txte.scroll_type
   {
-    limit := len(txte.buffer) - int(txte.glyph_size.y)
-    limit =  (limit < 0) ? 0 : limit
-    txte.offset += (txte.offset < uint(limit)) ? 1 : 0
+    if .NEXT == dir
+    {
+      limit := len(txte.buffer) - int(txte.glyph_size.y)
+      limit =  (limit < 0) ? 0 : limit
+      txte.offset += (txte.offset < uint(limit)) ? 1 : 0
+    }
+    else
+    {
+      txte.offset -= (0 < txte.offset) ? 1 : 0
+    }
   }
-  else
+  else // PAGED
   {
-    txte.offset -= (0 < txte.offset) ? 1 : 0
+    if .NEXT == dir
+    {
+      new_offset := txte.offset + uint(txte.glyph_size.y)
+      new_offset -= (new_offset < uint(len(txte.buffer))) ? 1 : 0
+      new_offset -= (0 < new_offset)                      ? 1 : 0
+      txte.offset = (uint(len(txte.buffer)) < new_offset)?txte.offset:new_offset
+    }
+    else
+    {
+      new_offset := int(txte.offset) - (int(txte.glyph_size.y))
+      new_offset += (new_offset < len(txte.buffer)) ? 1 : 0
+      new_offset += (0 < new_offset)                ? 1 : 0
+      txte.offset = (new_offset < 0) ? 0 : uint(new_offset)
+    }
   }
 }
 
@@ -148,13 +171,20 @@ update_text_element_buffer :: proc(
   font : rl.Font
   ) {
   {
-    txte.glyph_size.x = math.trunc(rec.width / font.recs[0].width)
-
     glyph_pad    := f32(font.glyphPadding) / 2
     max_height   := rec.height + glyph_pad
     glyph_height := f32(font.baseSize) + glyph_pad
-
     txte.glyph_size.y = math.trunc(max_height / glyph_height)
+
+    new_width := math.trunc(rec.width / font.recs[0].width)
+    if txte.glyph_size.x != new_width
+    {
+      txte.glyph_size.x = new_width
+    }
+    else 
+    {
+      return
+    }
   }
 
   if txte.buffer != nil
@@ -212,10 +242,13 @@ update_text_element_buffer :: proc(
     }
     start = (has_spaces) ? (end + 1) : end
   }
+  /*
   offset_limit := len(txte.buffer) - int(txte.glyph_size.y)
   offset_limit =  (offset_limit < 0) ? 0 : offset_limit
   txte.offset = (uint(offset_limit) < txte.offset) ? uint(offset_limit) :
                                                      txte.offset
+                                                     */
+  txte.offset = 0
 }
 
 @(private)
@@ -228,36 +261,63 @@ draw_text_element :: proc(
   start := txte.offset
   end   := txte.offset + uint(txte.glyph_size.y)
 
-  {
-    center := rec.x + math.trunc(rec.width / 2)
-    half_font_width := f32(font.recs[0].width / 2)
+  draw_triangles: {
 
-    if 0 < txte.offset
+    start += (0 < txte.offset)              ? 1 : 0
+    end   -= (end < uint(len(txte.buffer))) ? 1 : 0
+
+    after_text := rec.y + rec.height - f32(font.baseSize)
+    if .VERTICAL == txte.scroll_type
     {
-      start += 1
+      center := rec.x + math.trunc(rec.width / 2)
+      half_font_width := f32(font.recs[0].width / 2)
 
-      plus_height := rec.y + f32(font.baseSize)
-      rl.DrawTriangle(
-        {center,                   rec.y},
-        {center - half_font_width, plus_height},
-        {center + half_font_width, plus_height},
-        fg_color
-        )
+      if 0 < txte.offset
+      {
+        plus_height := rec.y + f32(font.baseSize)
+        rl.DrawTriangle(
+          {center,                   rec.y},
+          {center - half_font_width, plus_height},
+          {center + half_font_width, plus_height},
+          fg_color
+          )
+      }
+      if end < uint(len(txte.buffer))
+      {
+        rl.DrawTriangle(
+          {center + half_font_width, after_text},
+          {center - half_font_width, after_text},
+          {center,                   after_text + f32(font.baseSize)},
+          fg_color
+          )
+      }
     }
-    if end < uint(len(txte.buffer))
+    else // PAGED
     {
-      end -= 1
-
-      after_text := rec.y + rec.height - f32(font.baseSize)
-      rl.DrawTriangle(
-        {center + half_font_width, after_text},
-        {center - half_font_width, after_text},
-        {center,                   after_text + f32(font.baseSize)},
-        fg_color
-        )
+      font_width       := f32(font.recs[0].width)
+      half_font_height := f32(font.baseSize / 2)
+      if 0 < txte.offset
+      {
+        plus_width := rec.x + font_width
+        rl.DrawTriangle(
+          {plus_width, rec.y},
+          {rec.x,      rec.y + half_font_height},
+          {plus_width, rec.y + f32(font.baseSize)},
+          fg_color)
+      }
+      if end < uint(len(txte.buffer))
+      {
+        right_of_text := rec.x + rec.width - font_width
+        rl.DrawTriangle(
+          {right_of_text,              after_text},
+          {right_of_text,              after_text + f32(font.baseSize)},
+          {right_of_text + font_width, after_text + half_font_height},
+          fg_color)
+      }
     }
   }
   end = (uint(len(txte.buffer)) < end) ? len(txte.buffer) : end
+  start = (end < start) ? end : start
 
   joined_txt := str.join(txte.buffer[start:end], "\n")
   joined_txt_cstring := str.clone_to_cstring(joined_txt)
@@ -767,17 +827,17 @@ process_window_list_input :: proc(
     }
   }
 
-  g_cursor_state = .DEFAULT
-
   new_top_index := -1
-  outer: for win, i in list
+  windows: for win, i in list
   {
+    must_reset := false
+
     action: switch win.act_state
     {
     case .NONE:
       if !is_v2_within_rec(mouse_pos, win.emt.rec)
       {
-        continue
+        continue windows
       }
       g_cursor_state = .POTENTIAL
 
@@ -785,7 +845,7 @@ process_window_list_input :: proc(
       {
         if is_v2_within_rec(mouse_pos, list[j].emt.rec)
         {
-          continue outer
+          continue windows
         }
       }
 
@@ -803,23 +863,39 @@ process_window_list_input :: proc(
 
       element := get_element_under_mouse(win.emt, mouse_pos)
 
-      touching_txt_element := false
-      txt_element_half: enum{UPPER, LOWER}
+      hovering_txt_element := false
+      txt_element_dir: enum{PREV, NEXT}
       if element != nil
       {
         #partial switch d in element.data
         {
         case TextElement:
-          touching_txt_element = true
-          if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
+          hovering_txt_element = true
+          if .VERTICAL == d.scroll_type
           {
-            txt_element_half = .UPPER
-            g_cursor_state = .SCROLL_UP
+            if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
+            {
+              txt_element_dir = .PREV
+              g_cursor_state = .SCROLL_UP
+            }
+            else
+            {
+              txt_element_dir = .NEXT
+              g_cursor_state = .SCROLL_DOWN
+            }
           }
-          else
+          else // PAGED
           {
-            txt_element_half = .LOWER
-            g_cursor_state = .SCROLL_DOWN
+            if mouse_pos.x <= element.rec.x + math.trunc(element.rec.width / 2)
+            {
+              txt_element_dir = .PREV
+              g_cursor_state = .PAGE_PREV
+            }
+            else
+            {
+              txt_element_dir = .NEXT
+              g_cursor_state = .PAGE_NEXT
+            }
           }
         }
       }
@@ -827,15 +903,30 @@ process_window_list_input :: proc(
       #partial switch button_pressed
       {
       case .LEFT:
-        if touching_txt_element
+        if hovering_txt_element
         {
-          if .UPPER == txt_element_half
+          txte := &element.data.(TextElement)
+          if .VERTICAL == txte.scroll_type
           {
-            win.act_state = .SCROLL_UP
+            if .PREV == txt_element_dir
+            {
+              win.act_state = .SCROLL_UP
+            }
+            else
+            {
+              win.act_state = .SCROLL_DOWN
+            }
           }
           else
           {
-            win.act_state = .SCROLL_DOWN
+            if .PREV == txt_element_dir
+            {
+              scroll_text_element(txte, .PREV)
+            }
+            else
+            {
+              scroll_text_element(txte, .NEXT)
+            }
           }
         }
         else if win.draggable
@@ -844,8 +935,8 @@ process_window_list_input :: proc(
             (mouse_pos.x - win.emt.rec.x), 
             (mouse_pos.y - win.emt.rec.y)
           }
-          g_cursor_state = .DRAG
           win.act_state = .DRAG
+          g_cursor_state = .DRAG
         } 
         break action
 
@@ -864,50 +955,49 @@ process_window_list_input :: proc(
 
       if wheel_move != 0
       {
-        if !touching_txt_element
+        if !hovering_txt_element
         {
-          break outer
+          break windows
         }
         txt_element := &element.data.(TextElement)
         if wheel_move < 0
         {
-          scroll_text_element(txt_element, .DOWN)
+          scroll_text_element(txt_element, .NEXT)
         }
         else
         {
-          scroll_text_element(txt_element, .UP)
+          scroll_text_element(txt_element, .PREV)
         }
-        break outer
+        break windows
       }
       continue
 
     case .DRAG:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        win.act_state = .NONE
+        must_reset = true
       }
       win.emt.rec.x = mouse_pos.x - mouse_offset.x
       win.emt.rec.y = mouse_pos.y - mouse_offset.y
-      g_cursor_state = .DRAG
 
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
       {
-        win.act_state = .NONE
+        must_reset = true
       }
       win.emt.rec.width = mouse_pos.x - win.emt.rec.x
       win.emt.rec.height = mouse_pos.y - win.emt.rec.y
-      g_cursor_state = .RESIZE
 
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        win.act_state = .NONE
+        must_reset = true
       }
       element := get_element_under_mouse(win.emt, mouse_pos)
       if nil == element
       {
-        break outer
+        must_reset = true
+        break action
       }
       txt_element: ^TextElement
       #partial switch &d in element.data
@@ -917,21 +1007,29 @@ process_window_list_input :: proc(
       }
       if nil == txt_element
       {
-        break outer
+        must_reset = true
+        break action
       }
       if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
       {
-        scroll_text_element(txt_element, .UP)
+        scroll_text_element(txt_element, .PREV)
         g_cursor_state = .SCROLL_UP
       }
       else
       {
-        scroll_text_element(txt_element, .DOWN)
+        scroll_text_element(txt_element, .NEXT)
         g_cursor_state = .SCROLL_DOWN
       }
     }
+    if must_reset
+    {
+      win.act_state = .NONE
+      g_cursor_state = .DEFAULT
+      break windows
+    }
+
     new_top_index = (i != 0) ? i : -1
-    break
+    break windows
   }
   if 0 < new_top_index
   {

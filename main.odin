@@ -97,8 +97,9 @@ main :: proc()
 
   txt2 := gui.Element{
     data=gui.TextElement{
-      txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative."
-        }
+      txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative.",
+      scroll_type=.PAGED
+      }
   }
   defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
@@ -185,6 +186,12 @@ main :: proc()
         cursor_txr_offset = 80
         cursor_pos.x -= 8
         cursor_pos.y -= 4
+      case .PAGE_PREV:
+        cursor_txr_offset = 96
+        cursor_pos -= 8
+      case .PAGE_NEXT:
+        cursor_txr_offset = 112
+        cursor_pos -= 8
       }
       rl.DrawTextureRec(
         cursor_txr,
