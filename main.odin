@@ -28,7 +28,6 @@ SCR_H :: NAT_SCR_H * SCALE
 
 FPS   :: 20
 
-
 main :: proc()
 {
   /* Logger boilerplate, copied from Karl Zylinski */
@@ -124,7 +123,7 @@ main :: proc()
     }
   }
 
-  win: gui.Window = {
+  win1: gui.Window = {
     draggable=true,
 
     emt=&gui.Element {
@@ -137,7 +136,7 @@ main :: proc()
   }
 
   wlist := []^gui.Window{ 
-    &win
+    &win1
   }
 
   vfps_counter := 0
@@ -167,7 +166,7 @@ main :: proc()
       cursor_pos := rl.GetMousePosition()
       cursor_pos.x = math.trunc(cursor_pos.x / SCALE)
       cursor_pos.y = math.trunc(cursor_pos.y / SCALE)
-      #partial switch gui.get_action_state()
+      #partial switch gui.get_cursor_state()
       {
       case .POTENTIAL:
         cursor_txr_offset = 16
@@ -178,6 +177,14 @@ main :: proc()
       case .RESIZE:
         cursor_txr_offset = 48
         cursor_pos -= 16
+      case .SCROLL_UP:
+        cursor_txr_offset = 64
+        cursor_pos.x -= 8
+        cursor_pos.y -= 12
+      case .SCROLL_DOWN:
+        cursor_txr_offset = 80
+        cursor_pos.x -= 8
+        cursor_pos.y -= 4
       }
       rl.DrawTextureRec(
         cursor_txr,

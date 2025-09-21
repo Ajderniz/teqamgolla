@@ -8,13 +8,11 @@ package gui
 
 import      "core:c"
 import      "core:math"
+import      "core:log"
 import sort "core:sort"
 import str  "core:strings"
 
 import rl   "vendor:raylib"
-
-
-import "core:fmt"
 
 TextElement :: struct {
   txt        : string,
@@ -50,9 +48,19 @@ Element :: struct {
 
 ActionState :: enum {
   NONE,
+  DRAG,
+  RESIZE,
+  SCROLL_UP,
+  SCROLL_DOWN,
+}
+
+CursorState :: enum {
+  DEFAULT,
   POTENTIAL,
   DRAG,
   RESIZE,
+  SCROLL_UP,
+  SCROLL_DOWN
 }
 
 Window :: struct {
@@ -62,13 +70,13 @@ Window :: struct {
   emt       : ^Element
 }
 
-@(private) g_act_state  : ActionState
+@(private) g_cursor_state  : CursorState
 
-@(private) g_font       : rl.Font
-@(private) g_pad        : f32
-@(private) g_fg_color   : rl.Color
-@(private) g_bg_color   : rl.Color
-@(private) g_line_thick : f32
+@(private) g_font          : rl.Font
+@(private) g_pad           : f32
+@(private) g_fg_color      : rl.Color
+@(private) g_bg_color      : rl.Color
+@(private) g_line_thick    : f32
 
 @(private) g_header_height : f32
 @(private) g_base_unit     : rl.Vector2
@@ -116,6 +124,21 @@ get_element_under_mouse :: proc(
     }
   }
   return nil
+}
+
+@(private)
+scroll_text_element :: proc(txte: ^TextElement, dir: enum{UP, DOWN})
+{
+  if .DOWN == dir
+  {
+    limit := len(txte.buffer) - int(txte.glyph_size.y)
+    limit =  (limit < 0) ? 0 : limit
+    txte.offset += (txte.offset < uint(limit)) ? 1 : 0
+  }
+  else
+  {
+    txte.offset -= (0 < txte.offset) ? 1 : 0
+  }
 }
 
 @(private)
@@ -265,7 +288,7 @@ draw_label :: proc(
   len      := str.rune_count(txt)
   max_cols := int(math.trunc(max_width / font.recs[0].width))
 
-  ok: bool
+  ok: bool // unused
   line: string
   must_add_tilde := (max_cols < len)
   if must_add_tilde
@@ -730,6 +753,8 @@ process_window_list_input :: proc(
   scale: int
   )
 {
+  @(static) mouse_offset: rl.Vector2
+
   if rl.IsKeyPressed(.TAB)
   {
     if rl.IsKeyDown(.LEFT_SHIFT)
@@ -742,22 +767,20 @@ process_window_list_input :: proc(
     }
   }
 
-  @(static) mouse_offset: rl.Vector2
+  g_cursor_state = .DEFAULT
 
   new_top_index := -1
   outer: for win, i in list
   {
-    must_reset_state := false
-
-    g_act_state = (is_v2_within_rec(mouse_pos, win.emt.rec))? .POTENTIAL : .NONE
-
     action: switch win.act_state
     {
-    case .NONE, .POTENTIAL:
-      if g_act_state != .POTENTIAL
+    case .NONE:
+      if !is_v2_within_rec(mouse_pos, win.emt.rec)
       {
         continue
       }
+      g_cursor_state = .POTENTIAL
+
       for j in 0..<i
       {
         if is_v2_within_rec(mouse_pos, list[j].emt.rec)
@@ -778,79 +801,134 @@ process_window_list_input :: proc(
         button_pressed = .RIGHT
       }
 
-      if win.draggable && .LEFT == button_pressed
+      element := get_element_under_mouse(win.emt, mouse_pos)
+
+      touching_txt_element := false
+      txt_element_half: enum{UPPER, LOWER}
+      if element != nil
       {
-        g_act_state = .DRAG
-        mouse_offset = {
-          (mouse_pos.x - win.emt.rec.x), 
-          (mouse_pos.y - win.emt.rec.y)
-        }
-        win.act_state = .DRAG
-      } 
-      else if !win.emt.non_resizable && .RIGHT == button_pressed
-      {
-        rl.SetMousePosition(
-          i32(win.emt.rec.x + win.emt.rec.width) * i32(scale),
-          i32(win.emt.rec.y + win.emt.rec.height) * i32(scale)
-          )
-        g_act_state = .RESIZE
-        win.act_state = .RESIZE
-      }
-      else if wheel_move != 0
-      {
-        element := get_element_under_mouse(win.emt, mouse_pos)
-        if nil == element
-        {
-          break
-        }
-        #partial switch &d in element.data
+        #partial switch d in element.data
         {
         case TextElement:
-          if wheel_move < 0
+          touching_txt_element = true
+          if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
           {
-            limit := len(d.buffer) - int(d.glyph_size.y)
-            limit =  (limit < 0) ? 0 : limit
-            d.offset += (d.offset < uint(limit)) ? 1 : 0
+            txt_element_half = .UPPER
+            g_cursor_state = .SCROLL_UP
           }
           else
           {
-            d.offset -= (0 < d.offset) ? 1 : 0
+            txt_element_half = .LOWER
+            g_cursor_state = .SCROLL_DOWN
           }
         }
       }
-      else if .LEFT == button_pressed || .RIGHT == button_pressed
+
+      #partial switch button_pressed
       {
-        break 
+      case .LEFT:
+        if touching_txt_element
+        {
+          if .UPPER == txt_element_half
+          {
+            win.act_state = .SCROLL_UP
+          }
+          else
+          {
+            win.act_state = .SCROLL_DOWN
+          }
+        }
+        else if win.draggable
+        {
+          mouse_offset = {
+            (mouse_pos.x - win.emt.rec.x), 
+            (mouse_pos.y - win.emt.rec.y)
+          }
+          g_cursor_state = .DRAG
+          win.act_state = .DRAG
+        } 
+        break action
+
+      case .RIGHT:
+        if !win.emt.non_resizable
+        {
+          rl.SetMousePosition(
+            i32(win.emt.rec.x + win.emt.rec.width) * i32(scale),
+            i32(win.emt.rec.y + win.emt.rec.height) * i32(scale)
+            )
+          win.act_state = .RESIZE
+          g_cursor_state = .RESIZE
+        }
+        break action
       }
-      else
+
+      if wheel_move != 0
       {
-        continue
+        if !touching_txt_element
+        {
+          break outer
+        }
+        txt_element := &element.data.(TextElement)
+        if wheel_move < 0
+        {
+          scroll_text_element(txt_element, .DOWN)
+        }
+        else
+        {
+          scroll_text_element(txt_element, .UP)
+        }
+        break outer
       }
+      continue
+
     case .DRAG:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        must_reset_state = true
-        break
+        win.act_state = .NONE
       }
-      g_act_state = .DRAG
       win.emt.rec.x = mouse_pos.x - mouse_offset.x
       win.emt.rec.y = mouse_pos.y - mouse_offset.y
+      g_cursor_state = .DRAG
 
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
       {
-        must_reset_state = true
-        break
+        win.act_state = .NONE
       }
-      g_act_state = .RESIZE
       win.emt.rec.width = mouse_pos.x - win.emt.rec.x
       win.emt.rec.height = mouse_pos.y - win.emt.rec.y
-    }
-    if must_reset_state
-    {
-      g_act_state = (g_act_state != .POTENTIAL) ? .NONE : .POTENTIAL
-      win.act_state = .NONE
-      continue
+      g_cursor_state = .RESIZE
+
+    case .SCROLL_UP, .SCROLL_DOWN:
+      if !rl.IsMouseButtonDown(.LEFT)
+      {
+        win.act_state = .NONE
+      }
+      element := get_element_under_mouse(win.emt, mouse_pos)
+      if nil == element
+      {
+        break outer
+      }
+      txt_element: ^TextElement
+      #partial switch &d in element.data
+      {
+      case TextElement:
+        txt_element = &d
+      }
+      if nil == txt_element
+      {
+        break outer
+      }
+      if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
+      {
+        scroll_text_element(txt_element, .UP)
+        g_cursor_state = .SCROLL_UP
+      }
+      else
+      {
+        scroll_text_element(txt_element, .DOWN)
+        g_cursor_state = .SCROLL_DOWN
+      }
     }
     new_top_index = (i != 0) ? i : -1
     break
@@ -874,7 +952,7 @@ draw_window_list :: proc(list: []^Window)
   }
 }
 
-get_action_state :: #force_inline proc() -> ActionState
+get_cursor_state :: #force_inline proc() -> CursorState
 {
-  return g_act_state
+  return g_cursor_state
 }
