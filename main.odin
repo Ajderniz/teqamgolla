@@ -26,7 +26,7 @@ SCALE :: 2
 SCR_W :: NAT_SCR_W * SCALE
 SCR_H :: NAT_SCR_H * SCALE
 
-FPS   :: 20
+FPS   :: 60
 
 main :: proc()
 {
@@ -79,7 +79,7 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  gui.init(font, base_unit=4) 
+  gui.init(font, base_unit=4, vf_freq=2) 
 
   cursor_txr := rl.LoadTexture("res/img/cursor.png")
 

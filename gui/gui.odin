@@ -73,6 +73,8 @@ Window :: struct {
   emt       : ^Element
 }
 
+@(private) g_vf_freq       : int
+
 @(private) g_cursor_state  : CursorState
 
 @(private) g_font          : rl.Font
@@ -152,7 +154,7 @@ scroll_text_element :: proc(txte: ^TextElement, dir: enum{PREV, NEXT})
       new_offset := txte.offset + uint(txte.glyph_size.y)
       new_offset -= (new_offset < uint(len(txte.buffer))) ? 1 : 0
       new_offset -= (0 < new_offset)                      ? 1 : 0
-      txte.offset = (uint(len(txte.buffer)) < new_offset)?txte.offset:new_offset
+      txte.offset = (uint(len(txte.buffer))<=new_offset)? txte.offset:new_offset
     }
     else
     {
@@ -170,6 +172,7 @@ update_text_element_buffer :: proc(
   rec  : rl.Rectangle,
   font : rl.Font
   ) {
+  txte.offset = 0
   {
     glyph_pad    := f32(font.glyphPadding) / 2
     max_height   := rec.height + glyph_pad
@@ -242,13 +245,6 @@ update_text_element_buffer :: proc(
     }
     start = (has_spaces) ? (end + 1) : end
   }
-  /*
-  offset_limit := len(txte.buffer) - int(txte.glyph_size.y)
-  offset_limit =  (offset_limit < 0) ? 0 : offset_limit
-  txte.offset = (uint(offset_limit) < txte.offset) ? uint(offset_limit) :
-                                                     txte.offset
-                                                     */
-  txte.offset = 0
 }
 
 @(private)
@@ -785,19 +781,21 @@ move_window_index_to_index :: proc(
 }
 
 init :: proc(
-  font       :  rl.Font,
-  pad        : f32 = 12,
-  fg_color  := rl.BLACK,
-  bg_color   := rl.WHITE,
-  line_thick : f32 = 1,
-  base_unit  : rl.Vector2 = { 1, 1 }
+  font       : rl.Font,
+  pad        : f32        = 12,
+  fg_color   :            = rl.BLACK,
+  bg_color   :            = rl.WHITE,
+  line_thick : f32        = 1,
+  base_unit  : rl.Vector2 = { 1, 1 },
+  vf_freq    :            = 1
 ) {
   g_font       = font
   g_pad        = pad
-  g_fg_color  = fg_color
+  g_fg_color   = fg_color
   g_bg_color   = bg_color
   g_line_thick = line_thick
   g_base_unit  = base_unit
+  g_vf_freq    = (0 < vf_freq) ? vf_freq : 1
 
   g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }
@@ -813,7 +811,10 @@ process_window_list_input :: proc(
   scale: int
   )
 {
+  @(static) vf_counter: int
   @(static) mouse_offset: rl.Vector2
+
+  vf_counter = (vf_counter + 1) % g_vf_freq
 
   if rl.IsKeyPressed(.TAB)
   {
@@ -830,11 +831,19 @@ process_window_list_input :: proc(
   new_top_index := -1
   windows: for win, i in list
   {
-    must_reset := false
+    vf_check: #partial switch win.act_state
+    {
+      case .DRAG, .RESIZE, .SCROLL_DOWN, .SCROLL_UP:
+        if vf_counter != 0
+        {
+          return
+        }
+    }
 
     action: switch win.act_state
     {
     case .NONE:
+      g_cursor_state = .DEFAULT
       if !is_v2_within_rec(mouse_pos, win.emt.rec)
       {
         continue windows
@@ -975,7 +984,8 @@ process_window_list_input :: proc(
     case .DRAG:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        must_reset = true
+        win.act_state = .NONE
+        break windows
       }
       win.emt.rec.x = mouse_pos.x - mouse_offset.x
       win.emt.rec.y = mouse_pos.y - mouse_offset.y
@@ -983,7 +993,8 @@ process_window_list_input :: proc(
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
       {
-        must_reset = true
+        win.act_state = .NONE
+        break windows
       }
       win.emt.rec.width = mouse_pos.x - win.emt.rec.x
       win.emt.rec.height = mouse_pos.y - win.emt.rec.y
@@ -991,13 +1002,14 @@ process_window_list_input :: proc(
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        must_reset = true
+        win.act_state = .NONE
+        break windows
       }
       element := get_element_under_mouse(win.emt, mouse_pos)
       if nil == element
       {
-        must_reset = true
-        break action
+        win.act_state = .NONE
+        break windows
       }
       txt_element: ^TextElement
       #partial switch &d in element.data
@@ -1007,8 +1019,8 @@ process_window_list_input :: proc(
       }
       if nil == txt_element
       {
-        must_reset = true
-        break action
+        win.act_state = .NONE
+        break windows
       }
       if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
       {
@@ -1021,13 +1033,6 @@ process_window_list_input :: proc(
         g_cursor_state = .SCROLL_DOWN
       }
     }
-    if must_reset
-    {
-      win.act_state = .NONE
-      g_cursor_state = .DEFAULT
-      break windows
-    }
-
     new_top_index = (i != 0) ? i : -1
     break windows
   }
