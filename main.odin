@@ -79,7 +79,7 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  gui.init(font, base_unit=4, vf_freq=2) 
+  gui.init(font, base_unit=4, vf_freq=4) 
 
   cursor_txr := rl.LoadTexture("res/img/cursor.png")
 
