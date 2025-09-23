@@ -1,5 +1,6 @@
 package gui
 
+import    "core:log"
 import    "core:math"
 import    "core:sort"
 
@@ -91,6 +92,33 @@ configure_box_element_min_size :: proc(parent: ^Element)
   min_size.y += (.VERTICAL == box.layout) ? pad : 0
   min_size.y += (box.header != "") ? g_header_height : 0
   parent.min_size = min_size
+
+  if parent.min_size.x<=parent.max_size.x|| parent.min_size.y<=parent.max_size.y
+  {
+    set_max_size_recursively :: proc(
+      p: ^Element,
+      max_size: rl.Vector2,
+      p_pad: f32
+      ) {
+      p.max_size.x=((0==p.max_size.x)||(max_size.x<p.max_size.x)) ? max_size.x :
+                                                                    p.max_size.x
+      p.max_size.y=((0==p.max_size.y)||(max_size.y<p.max_size.y)) ? max_size.y :
+                                                                    p.max_size.y
+      #partial switch d in p.data
+      {
+      case BoxElement:
+        for e in d.content
+        {
+          pad := (d.pad != nil) ? d.pad^ : g_pad
+          set_max_size_recursively(e, max_size, pad)
+        }
+      case:
+        p.max_size -= p_pad * 2
+      }
+      log.debug(p.max_size)
+    }
+    set_max_size_recursively(parent, parent.max_size, pad)
+  }
 }
 
 @(private)

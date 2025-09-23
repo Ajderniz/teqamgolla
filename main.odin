@@ -104,14 +104,14 @@ main :: proc()
   defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
   img := gui.Element{
-    non_resizable=true,
     data=gui.ImageElement{
       texture=danta,
-      resize=.CENTER
+      resize=.STRETCH
     }
   }
 
   box1 := gui.Element{
+    max_size={200, 0},
     data=gui.BoxElement{
       header="BOX1",
       content={&txt1, &img}
@@ -137,17 +137,8 @@ main :: proc()
     }
   }
 
-  win2: gui.Window = {
-    draggable = true,
-    element=&{
-      data=gui.BoxElement{
-        header="WIN2"
-      }
-    }
-  }
-
   wlist := []^gui.Window{ 
-    &win1, &win2
+    &win1
   }
 
   vfps_counter := 0
