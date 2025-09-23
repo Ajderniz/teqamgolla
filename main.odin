@@ -79,7 +79,7 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  gui.init(font, base_unit=4, vf_freq=4) 
+  gui.init(font, base_unit=4, vf_delay=2, scroll_delay=4) 
 
   cursor_txr := rl.LoadTexture("res/img/cursor.png")
 
@@ -104,9 +104,10 @@ main :: proc()
   defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
   img := gui.Element{
+    non_resizable=true,
     data=gui.ImageElement{
       texture=danta,
-      resize=.STRETCH
+      resize=.CENTER
     }
   }
 
@@ -127,7 +128,7 @@ main :: proc()
   win1: gui.Window = {
     draggable=true,
 
-    emt=&gui.Element {
+    element=&gui.Element {
       data=gui.BoxElement{
         header="HEADER",
         content={&box1, &txt2},
@@ -136,8 +137,17 @@ main :: proc()
     }
   }
 
+  win2: gui.Window = {
+    draggable = true,
+    element=&{
+      data=gui.BoxElement{
+        header="WIN2"
+      }
+    }
+  }
+
   wlist := []^gui.Window{ 
-    &win1
+    &win1, &win2
   }
 
   vfps_counter := 0

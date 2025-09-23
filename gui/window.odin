@@ -1,32 +1,33 @@
 package gui
 
+import    "core:log"
 import    "core:math"
 
 import rl "vendor:raylib"
 
 Window :: struct {
-  draggable : bool,
-  act_state : ActionState,
+  draggable     : bool,
+  act_state     : ActionState,
 
-  emt       : ^Element
+  using element : ^Element
 }
 
 @(private)
 draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 {
-  #partial switch d in win.emt.data
+  #partial switch d in win.data
   {
   case TextElement, ImageElement:
     return
   }
-  if win.emt.min_size.x <= 0 || win.emt.min_size.y <= 0
+  if win.min_size.x <= 0 || win.min_size.y <= 0
   {
-    configure_box_element_min_size(win.emt)
+    configure_box_element_min_size(win.element)
   }
 
-  rec := &win.emt.rec
-  min_size := win.emt.min_size
-  max_size := win.emt.max_size
+  rec := &win.rec
+  min_size := win.min_size
+  max_size := win.max_size
 
   if 2 <= g_base_unit.x && 2 <= g_base_unit.y
   {
@@ -50,10 +51,10 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 
   if update_sizes
   {
-    update_box_element_content_sizes(win.emt)
+    update_box_element_content_sizes(win.element)
   }
-  draw_box_element(win.emt.data.(BoxElement), win.emt.rec, highlight)
-  rl.DrawRectangleLinesEx(win.emt.rec, g_line_thick, g_fg_color)
+  draw_box_element(win.data.(BoxElement), win.rec, highlight)
+  rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
 }
 
 @(private)
@@ -95,9 +96,10 @@ process_window_list_input :: proc(
   )
 {
   @(static) vf_counter: int
+  @(static) scroll_counter: int
   @(static) mouse_offset: rl.Vector2
 
-  vf_counter = (vf_counter + 1) % g_vf_freq
+  vf_counter = (vf_counter + 1) % g_vf_delay
 
   if rl.IsKeyPressed(.TAB)
   {
@@ -126,20 +128,28 @@ process_window_list_input :: proc(
     action: switch win.act_state
     {
     case .NONE:
-      g_cursor_state = .DEFAULT
-      if !is_v2_within_rec(mouse_pos, win.emt.rec)
+      if 0 == i
+      {
+        g_cursor_state = .DEFAULT
+      }
+      else
+      {
+        g_cursor_state = (g_cursor_state != .DEFAULT)? g_cursor_state : .DEFAULT
+      }
+      
+      if !is_v2_within_rec(mouse_pos, win.rec)
       {
         continue windows
       }
-      g_cursor_state = .POTENTIAL
-
       for j in 0..<i
       {
-        if is_v2_within_rec(mouse_pos, list[j].emt.rec)
+        if is_v2_within_rec(mouse_pos, list[j].element.rec)
         {
           continue windows
         }
       }
+      
+      g_cursor_state = .POTENTIAL
 
       wheel_move := rl.GetMouseWheelMove()
 
@@ -153,7 +163,7 @@ process_window_list_input :: proc(
         button_pressed = .RIGHT
       }
 
-      element := get_element_under_mouse(win.emt, mouse_pos)
+      element := get_element_under_mouse(win.element, mouse_pos)
 
       hovering_txt_element := false
       txt_element_dir: enum{PREV, NEXT}
@@ -224,8 +234,8 @@ process_window_list_input :: proc(
         else if win.draggable
         {
           mouse_offset = {
-            (mouse_pos.x - win.emt.rec.x), 
-            (mouse_pos.y - win.emt.rec.y)
+            (mouse_pos.x - win.rec.x), 
+            (mouse_pos.y - win.rec.y)
           }
           win.act_state = .DRAG
           g_cursor_state = .DRAG
@@ -233,11 +243,11 @@ process_window_list_input :: proc(
         break action
 
       case .RIGHT:
-        if !win.emt.non_resizable
+        if !win.non_resizable
         {
           rl.SetMousePosition(
-            i32(win.emt.rec.x + win.emt.rec.width) * i32(scale),
-            i32(win.emt.rec.y + win.emt.rec.height) * i32(scale)
+            i32(win.rec.x + win.rec.width) * i32(scale),
+            i32(win.rec.y + win.rec.height) * i32(scale)
             )
           win.act_state = .RESIZE
           g_cursor_state = .RESIZE
@@ -270,8 +280,8 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      win.emt.rec.x = mouse_pos.x - mouse_offset.x
-      win.emt.rec.y = mouse_pos.y - mouse_offset.y
+      win.rec.x = mouse_pos.x - mouse_offset.x
+      win.rec.y = mouse_pos.y - mouse_offset.y
 
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
@@ -279,8 +289,8 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      win.emt.rec.width = mouse_pos.x - win.emt.rec.x
-      win.emt.rec.height = mouse_pos.y - win.emt.rec.y
+      win.rec.width = mouse_pos.x - win.rec.x
+      win.rec.height = mouse_pos.y - win.rec.y
 
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
@@ -288,7 +298,14 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      element := get_element_under_mouse(win.emt, mouse_pos)
+      
+      scroll_counter = (scroll_counter + 1) % g_scroll_delay
+      if scroll_counter != 0
+      {
+        break action
+      }
+
+      element := get_element_under_mouse(win.element, mouse_pos)
       if nil == element
       {
         win.act_state = .NONE

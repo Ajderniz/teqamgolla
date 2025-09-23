@@ -35,7 +35,8 @@ CursorState :: enum {
   PAGE_NEXT
 }
 
-@(private) g_vf_freq       : int
+@(private) g_vf_delay       : int
+@(private) g_scroll_delay  : int
 
 @(private) g_cursor_state  : CursorState
 
@@ -68,21 +69,23 @@ are_rectangles_overlapping :: #force_inline proc(
 }
 
 init :: proc(
-  font       : rl.Font,
-  pad        : f32        = 12,
-  fg_color   :            = rl.BLACK,
-  bg_color   :            = rl.WHITE,
-  line_thick : f32        = 1,
-  base_unit  : rl.Vector2 = { 1, 1 },
-  vf_freq    :            = 1
+  font         : rl.Font,
+  pad          : f32        = 12,
+  fg_color     :            = rl.BLACK,
+  bg_color     :            = rl.WHITE,
+  line_thick   : f32        = 1,
+  base_unit    : rl.Vector2 = { 1, 1 },
+  vf_delay      :            = 1,
+  scroll_delay :            = 1,
 ) {
-  g_font       = font
-  g_pad        = pad
-  g_fg_color   = fg_color
-  g_bg_color   = bg_color
-  g_line_thick = line_thick
-  g_base_unit  = base_unit
-  g_vf_freq    = (0 < vf_freq) ? vf_freq : 1
+  g_font         = font
+  g_pad          = pad
+  g_fg_color     = fg_color
+  g_bg_color     = bg_color
+  g_line_thick   = line_thick
+  g_base_unit    = base_unit
+  g_vf_delay     = (vf_delay < 0) ? 1 : vf_delay
+  g_scroll_delay = (scroll_delay < 0) ? 1 : scroll_delay
 
   g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }
