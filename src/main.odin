@@ -8,25 +8,15 @@
 
 package teqamgolla
 
-import "core:log"
-import "core:mem"
-import "core:math"
+import     "core:log"
+import     "core:mem"
+import     "core:math"
+import str "core:strings"
 
 import rl "vendor:raylib"
 
-import "gui"
-
-import "core:fmt"
-
-/* 'NAT' here stands for 'native'. */
-NAT_SCR_W :: 640
-NAT_SCR_H :: (NAT_SCR_W / 4) * 3
-
-SCALE :: 2
-SCR_W :: NAT_SCR_W * SCALE
-SCR_H :: NAT_SCR_H * SCALE
-
-FPS   :: 60
+import g "global"
+import   "gui"
 
 main :: proc()
 {
@@ -59,9 +49,9 @@ main :: proc()
 
   /* ========================== INITIALIZATION ============================== */
 
-  rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
+  rl.InitWindow(g.SCR_W, g.SCR_H, "Teqamgolla")
 
-  rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
+  rtxr := rl.LoadRenderTexture(g.NAT_SCR_W, g.NAT_SCR_H)
 
   font: rl.Font
   {
@@ -71,7 +61,7 @@ main :: proc()
       &codepoint_count)
 
     font = rl.LoadFontEx(
-      "res/fonts/Px437_DOS-V_re_ANK16.ttf",
+      "../res/fonts/Px437_DOS-V_re_ANK16.ttf",
       16,
       codepoints,
       codepoint_count)
@@ -81,12 +71,12 @@ main :: proc()
 
   gui.init(font, base_unit=4, vf_delay=2, scroll_delay=4) 
 
-  cursor_txr := rl.LoadTexture("res/img/cursor.png")
+  cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
-  bliss := rl.LoadTexture("res/img/bliss.jpg")
-  danta := rl.LoadTexture("res/img/danta.png")
+  bliss := rl.LoadTexture("../res/img/bliss.jpg")
+  danta := rl.LoadTexture("../res/img/danta.png")
 
-  rl.SetTargetFPS(FPS)
+  rl.SetTargetFPS(g.FPS)
 
   txt1 := gui.Element{
     data=gui.TextElement{
@@ -150,24 +140,24 @@ main :: proc()
   for false == rl.WindowShouldClose()
   {
     mpos := rl.GetMousePosition()
-    mpos.x = math.trunc(mpos.x / SCALE)
-    mpos.y = math.trunc(mpos.y / SCALE)
+    mpos.x = math.trunc(mpos.x / g.SCALE)
+    mpos.y = math.trunc(mpos.y / g.SCALE)
     mpos.x = (mpos.x < 0) ? 0 : mpos.x
     mpos.y = (mpos.y < 0) ? 0 : mpos.y
-    mpos.x = (NAT_SCR_W < mpos.x) ? NAT_SCR_W : mpos.x
-    mpos.y = (NAT_SCR_H < mpos.y) ? NAT_SCR_H : mpos.y
+    mpos.x = (g.NAT_SCR_W < mpos.x) ? g.NAT_SCR_W : mpos.x
+    mpos.y = (g.NAT_SCR_H < mpos.y) ? g.NAT_SCR_H : mpos.y
 
     rl.BeginTextureMode(rtxr)
 
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
-      gui.process_window_list_input(wlist, mpos, SCALE)
+      gui.process_window_list_input(wlist, mpos, g.SCALE)
       gui.draw_window_list(wlist)
 
       cursor_txr_offset: f32 = 0
       cursor_pos := rl.GetMousePosition()
-      cursor_pos.x = math.trunc(cursor_pos.x / SCALE)
-      cursor_pos.y = math.trunc(cursor_pos.y / SCALE)
+      cursor_pos.x = math.trunc(cursor_pos.x / g.SCALE)
+      cursor_pos.y = math.trunc(cursor_pos.y / g.SCALE)
       #partial switch gui.get_cursor_state()
       {
       case .POTENTIAL:
@@ -206,8 +196,8 @@ main :: proc()
       rl.ClearBackground(rl.BLACK)
       rl.DrawTexturePro(
         rtxr.texture,
-        { 0, 0, NAT_SCR_W, -NAT_SCR_H },
-        { 0, 0, SCR_W, SCR_H },
+        { 0, 0, g.NAT_SCR_W, -g.NAT_SCR_H },
+        { 0, 0, g.SCR_W, g.SCR_H },
         0,
         0,
         rl.WHITE)
