@@ -151,7 +151,7 @@ main :: proc()
 
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
-      gui.process_window_list_input(wlist, mpos, g.SCALE)
+      gui.process_window_list_input(wlist, mpos)
       gui.draw_window_list(wlist)
 
       cursor_txr_offset: f32 = 0

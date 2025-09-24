@@ -5,9 +5,14 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
+import g  "../global"
+
 Window :: struct {
   draggable     : bool,
   act_state     : ActionState,
+
+  maximized     : bool,
+  saved_rec     : rl.Rectangle,
 
   using element : ^Element
 }
@@ -88,11 +93,7 @@ move_window_index_to_index :: proc(
   list[dst_index] = win
 }
 
-process_window_list_input :: proc(
-  list: []^Window,
-  mouse_pos: rl.Vector2,
-  scale: int
-  )
+process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 {
   @(static) vf_counter: int
   @(static) scroll_counter: int
@@ -160,6 +161,10 @@ process_window_list_input :: proc(
       else if rl.IsMouseButtonPressed(.RIGHT)
       {
         button_pressed = .RIGHT
+      }
+      else if rl.IsMouseButtonPressed(.MIDDLE)
+      {
+        button_pressed = .MIDDLE
       }
 
       element := get_element_under_mouse(win.element, mouse_pos)
@@ -245,12 +250,33 @@ process_window_list_input :: proc(
         if !win.non_resizable
         {
           rl.SetMousePosition(
-            i32(win.x + win.width) * i32(scale),
-            i32(win.y + win.height) * i32(scale)
+            i32(win.x + win.width) * i32(g.SCALE),
+            i32(win.y + win.height) * i32(g.SCALE)
             )
           win.act_state = .RESIZE
           g_cursor_state = .RESIZE
         }
+        break action
+
+      case .MIDDLE:
+        if !win.maximized
+        {
+          win.saved_rec = win.rec
+
+          win.x = 0
+          win.y = 0
+          win.width = g.NAT_SCR_W
+          win.height = g.NAT_SCR_H
+
+          win.maximized = true
+        }
+        else
+        {
+          win.rec = win.saved_rec
+          win.maximized = false
+        }
+        win.act_state = .RESIZE
+
         break action
       }
 
