@@ -18,7 +18,7 @@ BoxElement :: struct {
 }
 
 @(private)
-configure_box_element_min_size :: proc(parent: ^Element)
+configure_box_element_size :: proc(parent: ^Element)
 {
   #partial switch d in parent.data
   {
@@ -62,7 +62,7 @@ configure_box_element_min_size :: proc(parent: ^Element)
       e.min_size.y = (e.min_size.y < og_size.y) ? og_size.y : e.min_size.y
 
     case BoxElement:
-      configure_box_element_min_size(e)
+      configure_box_element_size(e)
     }
 
     this_min_size := e.min_size
@@ -91,7 +91,8 @@ configure_box_element_min_size :: proc(parent: ^Element)
   min_size.x += (.VERTICAL == box.layout) ? 0   : pad
   min_size.y += (.VERTICAL == box.layout) ? pad : 0
   min_size.y += (box.header != "") ? g_header_height : 0
-  parent.min_size = min_size
+  parent.min_size.x=(parent.min_size.x<min_size.x)? min_size.x:parent.min_size.x
+  parent.min_size.y=(parent.min_size.y<min_size.y)? min_size.y:parent.min_size.y
 
   if parent.min_size.x<=parent.max_size.x|| parent.min_size.y<=parent.max_size.y
   {
@@ -109,28 +110,17 @@ configure_box_element_min_size :: proc(parent: ^Element)
       case BoxElement:
         for e in d.content
         {
-          pad := (d.pad != nil) ? d.pad^ : g_pad
-          set_max_size_recursively(e, max_size, pad)
+          set_max_size_recursively(e, max_size, (d.pad != nil) ? d.pad^ : g_pad)
         }
-      case:
-        p.max_size -= p_pad * 2
       }
-      log.debug(p.max_size)
     }
     set_max_size_recursively(parent, parent.max_size, pad)
   }
 }
 
 @(private)
-update_box_element_content_sizes :: proc(parent: ^Element)
+update_box_element_content_sizes :: proc(box: ^BoxElement, rec: rl.Rectangle)
 {
-  #partial switch d in parent.data
-  {
-  case TextElement, ImageElement:
-    return
-  }
-  box := parent.data.(BoxElement)
-
   IndexSizePair :: struct { index: int, size: f32 }
   isp_list: [dynamic]IndexSizePair
   defer delete(isp_list)
@@ -140,105 +130,153 @@ update_box_element_content_sizes :: proc(parent: ^Element)
 
   box_count: int
 
-  for e, i in box.content
+  collect_info:
   {
-    size := (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
-    switch d in e.data
+    for e, i in box.content
     {
-    case TextElement, ImageElement:
-      size += pad
-    case BoxElement:
-      size -= pad
-      box_count += 1
+      size := (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
+      switch d in e.data
+      {
+      case TextElement, ImageElement:
+        size += pad
+      case BoxElement:
+        size -= pad
+        box_count += 1
+      }
+      append(&isp_list, IndexSizePair{i, size})
     }
-    append(&isp_list, IndexSizePair{i, size})
+    sort.quick_sort_proc(
+      isp_list[:],
+      proc(left, right: IndexSizePair) -> int
+      {
+        if left.size < right.size
+        {
+          return 1
+        }
+        else if right.size < left.size
+        {
+          return -1
+        }
+        else
+        {
+          return 0
+        }
+      })
   }
-  sort.quick_sort_proc(
-    isp_list[:],
-    proc(left, right: IndexSizePair) -> int
-    {
-      if left.size < right.size
-      {
-        return 1
-      }
-      else if right.size < left.size
-      {
-        return -1
-      }
-      else
-      {
-        return 0
-      }
-    })
 
-  remaining_elements := f32(len(box.content))
+  remaining_elements := len(box.content)
 
   available_space: f32
   if .VERTICAL == box.layout
   {
-    available_space = parent.rec.height
+    available_space = rec.height
     available_space -= (box.header != "") ? g_header_height : 0
   }
   else
   {
-    available_space = parent.rec.width
+    available_space = rec.width
   }
-  available_space -= (pad * (remaining_elements + 1)) -
-                     (double_pad * f32(box_count))
+  available_space -= 
+    (pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
 
+  restrained_count: int
+
+  distribute_space:
   for isp in isp_list
   {
     e := box.content[isp.index]
 
-    share := math.trunc(available_space / remaining_elements)
-
     if e.non_resizable
     {
-      e.rec.width  = e.min_size.x
-      e.rec.height = e.min_size.y
-      available_space -= (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
+      e.width  = e.min_size.x
+      e.height = e.min_size.y
+      available_space -= (.VERTICAL == box.layout) ? e.height : e.width
       remaining_elements -= 1
+      restrained_count += 1
+
       continue
     }
 
-    if .VERTICAL == box.layout
+    restrain_min_size:
     {
-      e.rec.width = parent.rec.width
-      e.rec.height = (share < e.min_size.y) ? e.min_size.y : share
-    }
-    else
-    {
-      e.rec.width = (share < e.min_size.x) ? e.min_size.x : share
-      e.rec.height = parent.rec.height
-      e.rec.height -= (box.header != "") ? g_header_height : 0
+      share := math.trunc(available_space / f32(remaining_elements))
+
+      if .VERTICAL == box.layout
+      {
+        e.width = rec.width
+        e.height = (share < e.min_size.y) ? e.min_size.y : share
+      }
+      else
+      {
+        e.width = (share < e.min_size.x) ? e.min_size.x : share
+        e.height = rec.height
+        e.height -= (box.header != "") ? g_header_height : 0
+      }
     }
 
-    switch d in e.data
+    restrain_max_size:
+    {
+      has_max_width  := (e.min_size.x <= e.max_size.x)
+      has_max_height := (e.min_size.y <= e.max_size.y)
+      restrained_count += (has_max_width || has_max_height) ? 1 : 0
+      if has_max_width
+      {
+        e.width = (e.max_size.x < e.width) ? e.max_size.x : e.width
+      }
+      if has_max_height
+      {
+        e.height = (e.max_size.y < e.height) ? e.max_size.y : e.height
+      }
+    }
+
+    #partial switch d in e.data
     {
     case TextElement, ImageElement:
-      e.rec.width  -= (.VERTICAL == box.layout) ? double_pad : 0
-      e.rec.height -= (.VERTICAL == box.layout) ? 0 : double_pad
-    case BoxElement:
-      update_box_element_content_sizes(e)
+      e.width  -= (.VERTICAL == box.layout) ? double_pad : 0
+      e.height -= (.VERTICAL == box.layout) ? 0 : double_pad
     }
 
-    if e.min_size.x <= e.max_size.x
+    available_space -= (.VERTICAL == box.layout) ? e.height : e.width
+    remaining_elements -= 1
+  }
+
+  adjust_for_unused_space:
+  if 0 < available_space
+  {
+    unrestrained_count := len(box.content) - restrained_count
+    if unrestrained_count <= 0
     {
-      e.rec.width = (e.max_size.x < e.rec.width) ? e.max_size.x : e.rec.width
-    }
-    if e.min_size.y <= e.max_size.y
-    {
-      e.rec.height = (e.max_size.y < e.rec.height) ? e.max_size.y : e.rec.height
+      break adjust_for_unused_space
     }
 
+    share := math.trunc(available_space / f32(unrestrained_count))
+    for e, i in box.content
+    {
+      if e.min_size.x<=e.max_size.x||e.min_size.y<=e.max_size.y||e.non_resizable
+      {
+        continue
+      }
+      if .VERTICAL == box.layout
+      {
+        e.height += share
+      }
+      else
+      {
+        e.width += share
+      }
+    }
+  }
+
+  update_contents:
+  for e in box.content
+  {
     #partial switch &d in e.data
     {
     case TextElement:
-      update_text_element_buffer(&d, e.rec, ((box.font!=nil)?box.font^:g_font))
+      update_text_element_buffer(&d, e, ((box.font!=nil)?box.font^:g_font))
+    case BoxElement:
+      update_box_element_content_sizes(&d, e.rec)
     }
-
-    available_space -= (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
-    remaining_elements -= 1
   }
 }
 
@@ -289,11 +327,11 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
   content_offset: f32
   for e, i in box.content
   {
-    e.rec.x =  rec.x
-    e.rec.x += (.VERTICAL == box.layout) ? 0 : content_offset
+    e.x =  rec.x
+    e.x += (.VERTICAL == box.layout) ? 0 : content_offset
 
-    e.rec.y =  rec.y + header_offset
-    e.rec.y += (.VERTICAL == box.layout) ? content_offset : 0
+    e.y =  rec.y + header_offset
+    e.y += (.VERTICAL == box.layout) ? content_offset : 0
 
     switch d in e.data
     {
@@ -313,13 +351,13 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
       }
       if .VERTICAL == box.layout
       {
-        e.rec.x += pad
-        e.rec.y += (must_add_pad) ? pad : 0
+        e.x += pad
+        e.y += (must_add_pad) ? pad : 0
       }
       else
       {
-        e.rec.x += (must_add_pad) ? pad : 0
-        e.rec.y += pad
+        e.x += (must_add_pad) ? pad : 0
+        e.y += pad
       }
       content_offset += (must_add_pad) ? pad : 0
 
@@ -329,12 +367,12 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
         #partial switch d in box.content[i-1].data
         {
         case BoxElement:
-          e.rec.y -= (.VERTICAL == box.layout) ? pad : 0
-          e.rec.x -= (.VERTICAL == box.layout) ? 0   : pad
+          e.y -= (.VERTICAL == box.layout) ? pad : 0
+          e.x -= (.VERTICAL == box.layout) ? 0   : pad
         }
       }
     }
-    content_offset += (.VERTICAL == box.layout) ? e.rec.height : e.rec.width
+    content_offset += (.VERTICAL == box.layout) ? e.height : e.width
 
     switch d in e.data
     {
@@ -345,13 +383,13 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
       switch d.resize
       {
       case .NONE:
-        rl.DrawTextureV(d.texture, {e.rec.x, e.rec.y}, rl.WHITE)
+        rl.DrawTextureV(d.texture, {e.x, e.y}, rl.WHITE)
       case .CENTER:
         rl.DrawTextureV(
           d.texture,
           {
-            e.rec.x + (e.rec.width - f32(d.texture.width)) / 2,
-            e.rec.y + (e.rec.height - f32(d.texture.height)) / 2
+            e.x + (e.width - f32(d.texture.width)) / 2,
+            e.y + (e.height - f32(d.texture.height)) / 2
           },
           rl.WHITE)
       case .STRETCH:

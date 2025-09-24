@@ -5,7 +5,7 @@ import rl "vendor:raylib"
 Element :: struct {
   data          : union { TextElement, ImageElement, BoxElement },
 
-  rec           : rl.Rectangle,
+  using rec     : rl.Rectangle,
   min_size      : rl.Vector2,
   max_size      : rl.Vector2,
   non_resizable : bool

@@ -22,36 +22,35 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   }
   if win.min_size.x <= 0 || win.min_size.y <= 0
   {
-    configure_box_element_min_size(win.element)
+    configure_box_element_size(win.element)
   }
 
-  rec := &win.rec
   min_size := win.min_size
   max_size := win.max_size
 
   if 2 <= g_base_unit.x && 2 <= g_base_unit.y
   {
-    rec.x      -= f32(int(rec.x)      % int(g_base_unit.x))
-    rec.y      -= f32(int(rec.y)      % int(g_base_unit.y))
-    rec.width  -= f32(int(rec.width)  % int(g_base_unit.x))
-    rec.height -= f32(int(rec.height) % int(g_base_unit.y))
+    win.x      -= f32(int(win.x)      % int(g_base_unit.x))
+    win.y      -= f32(int(win.y)      % int(g_base_unit.y))
+    win.width  -= f32(int(win.width)  % int(g_base_unit.x))
+    win.height -= f32(int(win.height) % int(g_base_unit.y))
   }
 
-  rec.width  = (rec.width < min_size.x)  ? min_size.x : rec.width
-  rec.height = (rec.height < min_size.y) ? min_size.y : rec.height
+  win.width  = (win.width < min_size.x)  ? min_size.x : win.width
+  win.height = (win.height < min_size.y) ? min_size.y : win.height
 
   if min_size.x < max_size.x
   {
-    rec.width = (max_size.x < rec.width) ? max_size.x : rec.width
+    win.width = (max_size.x < win.width) ? max_size.x : win.width
   }
   if min_size.y < max_size.y
   {
-    rec.height = (max_size.y < rec.height) ? max_size.x : rec.height
+    win.height = (max_size.y < win.height) ? max_size.x : win.height
   }
 
   if update_sizes
   {
-    update_box_element_content_sizes(win.element)
+    update_box_element_content_sizes(&win.data.(BoxElement), win.rec)
   }
   draw_box_element(win.data.(BoxElement), win.rec, highlight)
   rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
@@ -175,7 +174,7 @@ process_window_list_input :: proc(
           hovering_txt_element = true
           if .VERTICAL == d.scroll_type
           {
-            if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
+            if mouse_pos.y <= element.y + math.trunc(element.height / 2)
             {
               txt_element_dir = .PREV
               g_cursor_state = .SCROLL_UP
@@ -188,7 +187,7 @@ process_window_list_input :: proc(
           }
           else // PAGED
           {
-            if mouse_pos.x <= element.rec.x + math.trunc(element.rec.width / 2)
+            if mouse_pos.x <= element.x + math.trunc(element.width / 2)
             {
               txt_element_dir = .PREV
               g_cursor_state = .PAGE_PREV
@@ -234,8 +233,8 @@ process_window_list_input :: proc(
         else if win.draggable
         {
           mouse_offset = {
-            (mouse_pos.x - win.rec.x), 
-            (mouse_pos.y - win.rec.y)
+            (mouse_pos.x - win.x), 
+            (mouse_pos.y - win.y)
           }
           win.act_state = .DRAG
           g_cursor_state = .DRAG
@@ -246,8 +245,8 @@ process_window_list_input :: proc(
         if !win.non_resizable
         {
           rl.SetMousePosition(
-            i32(win.rec.x + win.rec.width) * i32(scale),
-            i32(win.rec.y + win.rec.height) * i32(scale)
+            i32(win.x + win.width) * i32(scale),
+            i32(win.y + win.height) * i32(scale)
             )
           win.act_state = .RESIZE
           g_cursor_state = .RESIZE
@@ -280,8 +279,8 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      win.rec.x = mouse_pos.x - mouse_offset.x
-      win.rec.y = mouse_pos.y - mouse_offset.y
+      win.x = mouse_pos.x - mouse_offset.x
+      win.y = mouse_pos.y - mouse_offset.y
 
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
@@ -289,8 +288,8 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      win.rec.width = mouse_pos.x - win.rec.x
-      win.rec.height = mouse_pos.y - win.rec.y
+      win.width = mouse_pos.x - win.x
+      win.height = mouse_pos.y - win.y
 
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
@@ -322,7 +321,7 @@ process_window_list_input :: proc(
         win.act_state = .NONE
         break windows
       }
-      if mouse_pos.y <= element.rec.y + math.trunc(element.rec.height / 2)
+      if mouse_pos.y <= element.y + math.trunc(element.height / 2)
       {
         scroll_text_element(txt_element, .PREV)
         g_cursor_state = .SCROLL_UP

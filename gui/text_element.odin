@@ -1,5 +1,6 @@
 package gui
 
+import     "core:log"
 import     "core:math"
 import str "core:strings"
 
@@ -27,7 +28,7 @@ draw_text_label :: proc(
 
   ok: bool // unused
   line: string
-  must_add_tilde := (max_cols < len)
+  must_add_tilde := (max_cols <= len)
   if must_add_tilde
   {
     line, ok = str.substring_to(txt, max_cols - 1)
@@ -62,7 +63,6 @@ update_text_element_buffer :: proc(
   rec  : rl.Rectangle,
   font : rl.Font
   ) {
-  txte.offset = 0
   {
     glyph_pad    := f32(font.glyphPadding) / 2
     max_height   := rec.height + glyph_pad
@@ -73,6 +73,7 @@ update_text_element_buffer :: proc(
     if txte.glyph_size.x != new_width
     {
       txte.glyph_size.x = new_width
+      txte.offset = 0
     }
     else 
     {
@@ -93,7 +94,7 @@ update_text_element_buffer :: proc(
     line: string
     ok: bool
 
-    if end < (str.rune_count(txte.txt) - 1)
+    if end < (str.rune_count(txte.txt)  )
     {
       line, ok = str.substring(txte.txt, start, end)
     }
