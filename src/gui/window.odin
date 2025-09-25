@@ -30,9 +30,6 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     configure_box_element_size(win.element)
   }
 
-  min_size := win.min_size
-  max_size := win.max_size
-
   if 2 <= g_base_unit.x && 2 <= g_base_unit.y
   {
     win.x      -= f32(int(win.x)      % int(g_base_unit.x))
@@ -41,23 +38,31 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     win.height -= f32(int(win.height) % int(g_base_unit.y))
   }
 
-  win.width  = (win.width < min_size.x)  ? min_size.x : win.width
-  win.height = (win.height < min_size.y) ? min_size.y : win.height
+  restrain_min_max_sizes:
+  {
+    min_size := win.min_size
+    max_size := win.max_size
 
-  if min_size.x < max_size.x
-  {
-    win.width = (max_size.x < win.width) ? max_size.x : win.width
-  }
-  if min_size.y < max_size.y
-  {
-    win.height = (max_size.y < win.height) ? max_size.x : win.height
+    win.width  = (win.width < min_size.x)  ? min_size.x : win.width
+    win.height = (win.height < min_size.y) ? min_size.y : win.height
+
+    if min_size.x <= max_size.x
+    {
+      win.width = (max_size.x < win.width) ? max_size.x : win.width
+    }
+    if min_size.y <= max_size.y
+    {
+      win.height = (max_size.y < win.height) ? max_size.x : win.height
+    }
   }
 
   if update_sizes
   {
     update_box_element_content_sizes(&win.data.(BoxElement), win.rec)
   }
+  
   draw_box_element(win.data.(BoxElement), win.rec, highlight)
+
   rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
 }
 
@@ -262,8 +267,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 
       case .MIDDLE:
         if win.non_resizable ||
-           win.max_size.x < g.NAT_SCR_W ||
-           win.max_size.y < g.NAT_SCR_H
+           (0 < win.max_size.x && win.max_size.x < g.NAT_SCR_W) ||
+           (0 < win.max_size.y && win.max_size.y < g.NAT_SCR_H)
         {
           break action
         }
