@@ -255,10 +255,18 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
             )
           win.act_state = .RESIZE
           g_cursor_state = .RESIZE
+
+          win.maximized = false
         }
         break action
 
       case .MIDDLE:
+        if win.non_resizable ||
+           win.max_size.x < g.NAT_SCR_W ||
+           win.max_size.y < g.NAT_SCR_H
+        {
+          break action
+        }
         if !win.maximized
         {
           win.saved_rec = win.rec
