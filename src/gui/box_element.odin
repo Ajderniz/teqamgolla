@@ -10,123 +10,20 @@ BoxElement :: struct {
   header   : string,
   content  : []^Element,
   layout   : enum{ VERTICAL, HORIZONTAL },
-
-  font     : ^rl.Font,
-  pad      : ^f32,
-  fg_color : ^rl.Color,
-  bg_color : ^rl.Color,
 }
 
 @(private)
-configure_box_element_size :: proc(parent: ^Element)
-{
-  #partial switch d in parent.data
-  {
-  case TextElement, ImageElement:
-    return
-  }
-  box := parent.data.(BoxElement)
-
-  min_size: rl.Vector2
-
-  pad  := (box.pad  != nil) ? box.pad^  : g_pad
-  font := (box.font != nil) ? box.font^ : g_font
-
-  double_pad  := pad * 2
-  glyph_width  := f32(font.recs[0].width)
-  glyph_height := f32(font.baseSize + (font.glyphPadding / 2))
-
-  if len(box.content) <= 0 {
-    bare_min: rl.Vector2
-
-    bare_min.x = glyph_width + double_pad
-
-    bare_min.y =  glyph_height + double_pad
-    bare_min.y += (box.header != "") ? g_header_height : 0
-
-    parent.min_size = bare_min
-    return
-  }
-
-  for e, i in box.content
-  {
-    switch d in e.data
-    {
-    case TextElement:
-      e.min_size.x = (e.min_size.x < glyph_width)  ? glyph_width  : e.min_size.x
-      e.min_size.y=(e.min_size.y<(glyph_height*3))?(glyph_height*3):e.min_size.y
-
-    case ImageElement:
-      og_size: rl.Vector2 = { f32(d.texture.width), f32(d.texture.height) }
-      e.min_size.x = (e.min_size.x < og_size.x) ? og_size.x : e.min_size.x
-      e.min_size.y = (e.min_size.y < og_size.y) ? og_size.y : e.min_size.y
-
-    case BoxElement:
-      configure_box_element_size(e)
-    }
-
-    this_min_size := e.min_size
-    switch d in e.data
-    {
-    case TextElement, ImageElement:
-      this_min_size.x += (.VERTICAL == box.layout) ? double_pad : pad
-      this_min_size.y += (.VERTICAL == box.layout) ? pad        : double_pad
-
-    case BoxElement:
-      this_min_size.x -= (.VERTICAL == box.layout) ? 0   : pad
-      this_min_size.y -= (.VERTICAL == box.layout) ? pad : 0
-    }
-
-    if .VERTICAL == box.layout
-    {
-      min_size.x=(min_size.x < this_min_size.x)?this_min_size.x:min_size.x
-      min_size.y += this_min_size.y
-    }
-    else
-    {
-      min_size.x += this_min_size.x
-      min_size.y=(min_size.y < this_min_size.y)?this_min_size.y:min_size.y
-    }
-  }
-  min_size.x += (.VERTICAL == box.layout) ? 0   : pad
-  min_size.y += (.VERTICAL == box.layout) ? pad : 0
-  min_size.y += (box.header != "") ? g_header_height : 0
-  parent.min_size.x=(parent.min_size.x<min_size.x)? min_size.x:parent.min_size.x
-  parent.min_size.y=(parent.min_size.y<min_size.y)? min_size.y:parent.min_size.y
-
-  if parent.min_size.x<=parent.max_size.x|| parent.min_size.y<=parent.max_size.y
-  {
-    set_max_size_recursively :: proc(
-      p: ^Element,
-      max_size: rl.Vector2,
-      p_pad: f32
-      ) {
-      p.max_size.x=((0==p.max_size.x)||(max_size.x<p.max_size.x)) ? max_size.x :
-                                                                    p.max_size.x
-      p.max_size.y=((0==p.max_size.y)||(max_size.y<p.max_size.y)) ? max_size.y :
-                                                                    p.max_size.y
-      #partial switch d in p.data
-      {
-      case BoxElement:
-        for e in d.content
-        {
-          set_max_size_recursively(e, max_size, (d.pad != nil) ? d.pad^ : g_pad)
-        }
-      }
-    }
-    set_max_size_recursively(parent, parent.max_size, pad)
-  }
-}
-
-@(private)
-update_box_element_content_sizes :: proc(box: ^BoxElement, rec: rl.Rectangle)
-{
+update_box_element_content_sizes :: proc(
+  box    : ^BoxElement,
+  rec    : rl.Rectangle,
+  p_font : rl.Font,
+  p_pad  : f32,
+  ) {
   IndexSizePair :: struct { index: int, size: f32 }
   isp_list: [dynamic]IndexSizePair
   defer delete(isp_list)
 
-  pad := (box.pad != nil) ? box.pad^ : g_pad
-  double_pad := pad * 2
+  double_pad := p_pad * 2
 
   box_count: int
 
@@ -138,9 +35,9 @@ update_box_element_content_sizes :: proc(box: ^BoxElement, rec: rl.Rectangle)
       switch d in e.data
       {
       case TextElement, ImageElement:
-        size += pad
+        size += p_pad
       case BoxElement:
-        size -= pad
+        size -= p_pad
         box_count += 1
       }
       append(&isp_list, IndexSizePair{i, size})
@@ -177,7 +74,7 @@ update_box_element_content_sizes :: proc(box: ^BoxElement, rec: rl.Rectangle)
     available_space = rec.width
   }
   available_space -= 
-    (pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
+    (p_pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
 
   restrained_count: int
 
@@ -273,22 +170,29 @@ update_box_element_content_sizes :: proc(box: ^BoxElement, rec: rl.Rectangle)
     #partial switch &d in e.data
     {
     case TextElement:
-      update_text_element_buffer(&d, e, ((box.font!=nil)?box.font^:g_font))
+      update_text_element_buffer(&d, e, ((e.font != nil) ? e.font^ : p_font))
     case BoxElement:
-      update_box_element_content_sizes(&d, e.rec)
+      update_box_element_content_sizes(
+        &d,
+        e.rec,
+        ((e.font != nil) ? e.font^ : p_font),
+        ((e.pad  != nil) ? e.pad^  : p_pad))
     }
   }
 }
 
 @(private)
-draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
-{
-  font     := (box.font     != nil) ? box.font^     : g_font
-  pad      := (box.pad      != nil) ? box.pad^      : g_pad
-  fg_color := (box.fg_color != nil) ? box.fg_color^ : g_fg_color
-  bg_color := (box.bg_color != nil) ? box.bg_color^ : g_bg_color
+draw_box_element :: proc(
+  box        :  BoxElement,
+  rec        :  rl.Rectangle,
+  p_font     :  rl.Font,
+  p_pad      :  f32,
+  p_fg_color :  rl.Color,
+  p_bg_color :  rl.Color,
+  highlight  := false,
+  ) {
 
-  double_pad := pad * 2
+  double_pad := p_pad * 2
 
   // HEADER ====================================================================
 
@@ -299,20 +203,20 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
     header_rec := rec
     header_rec.height = header_offset
 
-    header_bg_color := (highlight) ? fg_color : bg_color
-    header_fg_color := (highlight) ? bg_color : fg_color
+    header_bg_color := (highlight) ? p_fg_color : p_bg_color
+    header_fg_color := (highlight) ? p_bg_color : p_fg_color
 
     rl.DrawRectangleRec(header_rec, header_bg_color)
     rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_fg_color)
 
-    header_rec.x += pad
-    header_rec.y += math.trunc(pad * 0.25)
+    header_rec.x += p_pad
+    header_rec.y += math.trunc(p_pad * 0.25)
     header_rec.width -= double_pad
     draw_text_label(
       box.header,
       {header_rec.x, header_rec.y},
       header_rec.width,
-      font,
+      g_font,
       header_fg_color)
   }
 
@@ -322,7 +226,7 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
   content_rec.y      += header_offset
   content_rec.height -= header_offset
 
-  rl.DrawRectangleRec(content_rec, bg_color)
+  rl.DrawRectangleRec(content_rec, p_bg_color)
 
   content_offset: f32
   for e, i in box.content
@@ -351,15 +255,15 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
       }
       if .VERTICAL == box.layout
       {
-        e.x += pad
-        e.y += (must_add_pad) ? pad : 0
+        e.x += p_pad
+        e.y += (must_add_pad) ? p_pad : 0
       }
       else
       {
-        e.x += (must_add_pad) ? pad : 0
-        e.y += pad
+        e.x += (must_add_pad) ? p_pad : 0
+        e.y += p_pad
       }
-      content_offset += (must_add_pad) ? pad : 0
+      content_offset += (must_add_pad) ? p_pad : 0
 
     case BoxElement:
       if 1 <= i
@@ -367,12 +271,16 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
         #partial switch d in box.content[i-1].data
         {
         case BoxElement:
-          e.y -= (.VERTICAL == box.layout) ? pad : 0
-          e.x -= (.VERTICAL == box.layout) ? 0   : pad
+          e.y -= (.VERTICAL == box.layout) ? p_pad : 0
+          e.x -= (.VERTICAL == box.layout) ? 0   : p_pad
         }
       }
     }
     content_offset += (.VERTICAL == box.layout) ? e.height : e.width
+
+    font     := (e.font     != nil) ? e.font^     : p_font
+    pad      := (e.pad      != nil) ? e.pad^      : p_pad
+    fg_color := (e.fg_color != nil) ? e.fg_color^ : p_fg_color
 
     switch d in e.data
     {
@@ -380,30 +288,16 @@ draw_box_element :: proc(box : BoxElement, rec: rl.Rectangle,highlight := false)
       draw_text_element(d, e.rec, font, fg_color)
 
     case ImageElement:
-      switch d.resize
-      {
-      case .NONE:
-        rl.DrawTextureV(d.texture, {e.x, e.y}, rl.WHITE)
-      case .CENTER:
-        rl.DrawTextureV(
-          d.texture,
-          {
-            e.x + (e.width - f32(d.texture.width)) / 2,
-            e.y + (e.height - f32(d.texture.height)) / 2
-          },
-          rl.WHITE)
-      case .STRETCH:
-        rl.DrawTexturePro(
-          d.texture,
-          { 0, 0, f32(d.texture.width), f32(d.texture.height) },
-          e.rec,
-          { 0, 0 },
-          0,
-          rl.WHITE)
-      }
+      draw_image_element(d, e.rec)
 
     case BoxElement:
-      draw_box_element(d, e.rec)
+      draw_box_element(
+        d,
+        e.rec,
+        font,
+        pad,
+        fg_color,
+        ((e.bg_color != nil) ? e.bg_color^ : p_bg_color))
     }
   }
 }

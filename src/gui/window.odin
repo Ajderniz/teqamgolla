@@ -5,7 +5,7 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
-import g  "../global"
+import    "../global"
 
 Window :: struct {
   draggable     : bool,
@@ -20,14 +20,13 @@ Window :: struct {
 @(private)
 draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 {
-  #partial switch d in win.data
-  {
-  case TextElement, ImageElement:
-    return
-  }
+  font     := (win.font     != nil) ? win.font^     : g_font
+  pad      := (win.pad      != nil) ? win.pad^      : g_pad
+  bg_color := (win.bg_color != nil) ? win.bg_color^ : g_bg_color
+
   if win.min_size.x <= 0 || win.min_size.y <= 0
   {
-    configure_box_element_size(win.element)
+    configure_element_min_size(win.element, font, pad)
   }
 
   if 2 <= g_base_unit.x && 2 <= g_base_unit.y
@@ -56,12 +55,26 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     }
   }
 
-  if update_sizes
+  switch &data in win.data
   {
-    update_box_element_content_sizes(&win.data.(BoxElement), win.rec)
+  case TextElement, ImageElement:
+    // This is still a mess. It's not a priority either.
+    return
+
+  case BoxElement:
+    if update_sizes
+    {
+      update_box_element_content_sizes(&data, win.rec, font, pad)
+    }
+    draw_box_element(
+      data,
+      win.rec,
+      font,
+      pad,
+      ((win.fg_color != nil) ? win.fg_color^ : g_fg_color),
+      ((win.bg_color != nil) ? win.bg_color^ : g_bg_color),
+      highlight)
   }
-  
-  draw_box_element(win.data.(BoxElement), win.rec, highlight)
 
   rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
 }
@@ -100,11 +113,11 @@ move_window_index_to_index :: proc(
 
 process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 {
-  @(static) vf_counter: int
+  @(static) frame_counter: int
   @(static) scroll_counter: int
   @(static) mouse_offset: rl.Vector2
 
-  vf_counter = (vf_counter + 1) % g_vf_delay
+  frame_counter = (frame_counter + 1) % g_frame_delay
 
   if rl.IsKeyPressed(.TAB)
   {
@@ -124,7 +137,7 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
     vf_check: #partial switch win.act_state
     {
       case .DRAG, .RESIZE, .SCROLL_DOWN, .SCROLL_UP:
-        if vf_counter != 0
+        if frame_counter != 0
         {
           return
         }
@@ -255,8 +268,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         if !win.non_resizable
         {
           rl.SetMousePosition(
-            i32(win.x + win.width) * i32(g.SCALE),
-            i32(win.y + win.height) * i32(g.SCALE)
+            i32(win.x + win.width) * i32(global.SCALE),
+            i32(win.y + win.height) * i32(global.SCALE)
             )
           win.act_state = .RESIZE
           g_cursor_state = .RESIZE
@@ -267,8 +280,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 
       case .MIDDLE:
         if win.non_resizable ||
-           (0 < win.max_size.x && win.max_size.x < g.NAT_SCR_W) ||
-           (0 < win.max_size.y && win.max_size.y < g.NAT_SCR_H)
+           (0 < win.max_size.x && win.max_size.x < global.NAT_SCR_W) ||
+           (0 < win.max_size.y && win.max_size.y < global.NAT_SCR_H)
         {
           break action
         }
@@ -278,8 +291,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 
           win.x = 0
           win.y = 0
-          win.width = g.NAT_SCR_W
-          win.height = g.NAT_SCR_H
+          win.width = global.NAT_SCR_W
+          win.height = global.NAT_SCR_H
 
           win.maximized = true
         }

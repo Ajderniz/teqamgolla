@@ -69,7 +69,7 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  gui.init(font, base_unit=4, vf_delay=2, scroll_delay=4) 
+  gui.init(font, base_unit=4, frame_delay=2, scroll_delay=4) 
 
   cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
@@ -119,11 +119,14 @@ main :: proc()
     draggable=true,
 
     element=&gui.Element {
+      data=gui.TextElement{txt="Drugs advert free-market sentient tube corrupted tower stimulate smart-sunglasses woman dome disposable realism. Concrete dead paranoid pen into shoes saturation point computer modem BASE jump warehouse. Systemic construct nano-sunglasses dead semiotics sign garage dolphin skyscraper faded franchise denim. Vehicle cartel sunglasses film towards A.I. cardboard beef noodles franchise assassin pen face forwards math-drugs hacker denim. Computer smart-claymore mine futurity bicycle post-render-farm decay dissident Legba geodesic wristwatch sprawl. Bicycle jeans BASE jump nodal point table paranoid sensory plastic fetishism dome meta-range-rover tiger-team pen. Vinyl denim receding boy woman sprawl tower refrigerator sunglasses franchise engine. Tower BASE jump rifle camera denim wristwatch-space engine assassin render-farm narrative futurity sentient. "}
+      /*
       data=gui.BoxElement{
         header="HEADER",
         content={&box1, &txt2},
         layout=.HORIZONTAL,
       }
+      */
     }
   }
 
@@ -148,7 +151,7 @@ main :: proc()
     mpos.y = (g.NAT_SCR_H < mpos.y) ? g.NAT_SCR_H : mpos.y
 
     rl.BeginTextureMode(rtxr)
-
+    {
       rl.DrawTexture(bliss, 0, 0, rl.WHITE)
 
       gui.process_window_list_input(wlist, mpos)
@@ -189,10 +192,11 @@ main :: proc()
         { cursor_txr_offset, 0, 16, 16 },
         cursor_pos,
         rl.WHITE)
-
+    }
     rl.EndTextureMode()
 
     rl.BeginDrawing()
+    {
       rl.ClearBackground(rl.BLACK)
       rl.DrawTexturePro(
         rtxr.texture,
@@ -201,6 +205,7 @@ main :: proc()
         0,
         0,
         rl.WHITE)
+    }
     rl.EndDrawing()
   }
     rl.UnloadTexture(danta)
