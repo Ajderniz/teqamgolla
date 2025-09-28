@@ -89,7 +89,7 @@ main :: proc()
     data=gui.TextElement{
       txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative.",
       scroll_type=.PAGED
-      }
+    }
   }
   defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
@@ -97,15 +97,16 @@ main :: proc()
     data=gui.ImageElement{
       texture=danta,
       resize=.STRETCH
-    }
+    },
+    //non_resizable={true,true}
   }
 
   box1 := gui.Element{
-    max_size={200, 0},
     data=gui.BoxElement{
       header="BOX1",
       content={&txt1, &img}
-    }
+    },
+    non_resizable={true,false}
   }
 
   box2 := gui.Element{
@@ -117,16 +118,12 @@ main :: proc()
 
   win1: gui.Window = {
     draggable=true,
-
     element=&gui.Element {
-      data=gui.TextElement{txt="Drugs advert free-market sentient tube corrupted tower stimulate smart-sunglasses woman dome disposable realism. Concrete dead paranoid pen into shoes saturation point computer modem BASE jump warehouse. Systemic construct nano-sunglasses dead semiotics sign garage dolphin skyscraper faded franchise denim. Vehicle cartel sunglasses film towards A.I. cardboard beef noodles franchise assassin pen face forwards math-drugs hacker denim. Computer smart-claymore mine futurity bicycle post-render-farm decay dissident Legba geodesic wristwatch sprawl. Bicycle jeans BASE jump nodal point table paranoid sensory plastic fetishism dome meta-range-rover tiger-team pen. Vinyl denim receding boy woman sprawl tower refrigerator sunglasses franchise engine. Tower BASE jump rifle camera denim wristwatch-space engine assassin render-farm narrative futurity sentient. "}
-      /*
       data=gui.BoxElement{
         header="HEADER",
-        content={&box1, &txt2},
+        content={&txt2, &box1},
         layout=.HORIZONTAL,
       }
-      */
     }
   }
 

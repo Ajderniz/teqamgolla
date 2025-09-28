@@ -10,8 +10,7 @@ Element :: struct {
   using rec     : rl.Rectangle,
   min_size      : rl.Vector2,
   max_size      : rl.Vector2,
-  non_resizable : bool, // TODO: make non_resizable for x and y
-  //non_resizable : struct { x, y: bool }
+  non_resizable : struct { x, y: bool },
 
   font          : ^rl.Font,
   pad           : ^f32,

@@ -76,62 +76,92 @@ update_box_element_content_sizes :: proc(
   available_space -= 
     (p_pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
 
-  restrained_count: int
+  constrained_count: int
 
   distribute_space:
   for isp in isp_list
   {
     e := box.content[isp.index]
 
-    if e.non_resizable
+    if e.non_resizable.x && e.non_resizable.y
     {
       e.width  = e.min_size.x
       e.height = e.min_size.y
       available_space -= (.VERTICAL == box.layout) ? e.height : e.width
       remaining_elements -= 1
-      restrained_count += 1
+      constrained_count += 1
 
       continue
     }
 
-    restrain_min_size:
+    is_constrained: bool
+
+    share := math.trunc(available_space / f32(remaining_elements))
+
+    update_width:
     {
-      share := math.trunc(available_space / f32(remaining_elements))
+      if e.non_resizable.x
+      {
+        e.width = e.min_size.x
+        is_constrained = (.HORIZONTAL == box.layout) ? true : false
+        break update_width
+      }
 
       if .VERTICAL == box.layout
       {
         e.width = rec.width
-        e.height = (share < e.min_size.y) ? e.min_size.y : share
       }
       else
       {
         e.width = (share < e.min_size.x) ? e.min_size.x : share
+      }
+
+      if e.min_size.x <= e.max_size.x
+      {
+        e.width = (e.max_size.x < e.width) ? e.max_size.x : e.width
+        is_constrained = true
+      }
+
+      #partial switch d in e.data
+      {
+      case TextElement, ImageElement:
+        e.width  -= (.VERTICAL == box.layout) ? double_pad : 0
+      }
+    }
+
+    update_height:
+    {
+      if e.non_resizable.y
+      {
+        e.height = e.min_size.y
+        is_constrained = (.VERTICAL == box.layout) ? true : false
+        break update_height
+      }
+
+      if .VERTICAL == box.layout
+      {
+        e.height = (share < e.min_size.y) ? e.min_size.y : share
+      }
+      else
+      {
         e.height = rec.height
         e.height -= (box.header != "") ? g_header_height : 0
       }
-    }
 
-    restrain_max_size:
-    {
-      has_max_width  := (e.min_size.x <= e.max_size.x)
-      has_max_height := (e.min_size.y <= e.max_size.y)
-      restrained_count += (has_max_width || has_max_height) ? 1 : 0
-      if has_max_width
-      {
-        e.width = (e.max_size.x < e.width) ? e.max_size.x : e.width
-      }
-      if has_max_height
+      if e.min_size.y <= e.max_size.y
       {
         e.height = (e.max_size.y < e.height) ? e.max_size.y : e.height
+        is_constrained = true
+      }
+
+      #partial switch d in e.data
+      {
+      case TextElement, ImageElement:
+        e.height -= (.VERTICAL == box.layout) ? 0 : double_pad
       }
     }
 
-    #partial switch d in e.data
-    {
-    case TextElement, ImageElement:
-      e.width  -= (.VERTICAL == box.layout) ? double_pad : 0
-      e.height -= (.VERTICAL == box.layout) ? 0 : double_pad
-    }
+    constrained_count += (is_constrained) ? 1 : 0
 
     available_space -= (.VERTICAL == box.layout) ? e.height : e.width
     remaining_elements -= 1
@@ -140,26 +170,26 @@ update_box_element_content_sizes :: proc(
   adjust_for_unused_space:
   if 0 < available_space
   {
-    unrestrained_count := len(box.content) - restrained_count
-    if unrestrained_count <= 0
+    unconstrained_count := len(box.content) - constrained_count
+    if unconstrained_count <= 0
     {
       break adjust_for_unused_space
     }
 
-    share := math.trunc(available_space / f32(unrestrained_count))
+    share := math.trunc(available_space / f32(unconstrained_count))
     for e, i in box.content
     {
-      if e.min_size.x<=e.max_size.x||e.min_size.y<=e.max_size.y||e.non_resizable
+      if e.min_size.x <= e.max_size.x || e.min_size.y <= e.max_size.y
       {
         continue
       }
       if .VERTICAL == box.layout
       {
-        e.height += share
+        e.height += (!e.non_resizable.y) ? share : e.height
       }
       else
       {
-        e.width += share
+        e.width  += (!e.non_resizable.x) ? share : e.width
       }
     }
   }

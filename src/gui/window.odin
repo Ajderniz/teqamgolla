@@ -22,6 +22,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 {
   font     := (win.font     != nil) ? win.font^     : g_font
   pad      := (win.pad      != nil) ? win.pad^      : g_pad
+  fg_color := (win.fg_color != nil) ? win.fg_color^ : g_fg_color
   bg_color := (win.bg_color != nil) ? win.bg_color^ : g_bg_color
 
   if win.min_size.x <= 0 || win.min_size.y <= 0
@@ -57,23 +58,23 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 
   switch &data in win.data
   {
-  case TextElement, ImageElement:
-    // This is still a mess. It's not a priority either.
-    return
+  case TextElement:
+    if update_sizes{
+      update_text_element_buffer(&data, win.rec, font)
+    }
+    rl.DrawRectangleRec(win.rec, bg_color)
+    draw_text_element(data, win.rec, font, fg_color)
+
+  case ImageElement:
+    rl.DrawRectangleRec(win.rec, bg_color)
+    draw_image_element(data, win.rec)
 
   case BoxElement:
     if update_sizes
     {
       update_box_element_content_sizes(&data, win.rec, font, pad)
     }
-    draw_box_element(
-      data,
-      win.rec,
-      font,
-      pad,
-      ((win.fg_color != nil) ? win.fg_color^ : g_fg_color),
-      ((win.bg_color != nil) ? win.bg_color^ : g_bg_color),
-      highlight)
+    draw_box_element(data, win.rec, font, pad, fg_color, bg_color, highlight)
   }
 
   rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
@@ -261,11 +262,13 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
           }
           win.act_state = .DRAG
           g_cursor_state = .DRAG
+
+          win.maximized = false
         } 
         break action
 
       case .RIGHT:
-        if !win.non_resizable
+        if !(win.non_resizable.x && win.non_resizable.y)
         {
           rl.SetMousePosition(
             i32(win.x + win.width) * i32(global.SCALE),
@@ -279,7 +282,7 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         break action
 
       case .MIDDLE:
-        if win.non_resizable ||
+        if (win.non_resizable.x && win.non_resizable.y) ||
            (0 < win.max_size.x && win.max_size.x < global.NAT_SCR_W) ||
            (0 < win.max_size.y && win.max_size.y < global.NAT_SCR_H)
         {
@@ -289,10 +292,16 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         {
           win.saved_rec = win.rec
 
-          win.x = 0
-          win.y = 0
-          win.width = global.NAT_SCR_W
-          win.height = global.NAT_SCR_H
+          if !win.non_resizable.x
+          {
+            win.x = 0
+            win.width = global.NAT_SCR_W
+          }
+          if !win.non_resizable.y
+          {
+            win.y = 0
+            win.height = global.NAT_SCR_H
+          }
 
           win.maximized = true
         }
@@ -340,8 +349,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         win.act_state = .NONE
         break windows
       }
-      win.width = mouse_pos.x - win.x
-      win.height = mouse_pos.y - win.y
+      win.width =  (!win.non_resizable.x) ? mouse_pos.x - win.x : win.width
+      win.height = (!win.non_resizable.y) ? mouse_pos.y - win.y : win.height
 
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
