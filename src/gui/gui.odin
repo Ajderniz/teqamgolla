@@ -6,8 +6,8 @@
 
 package gui
 
-import    "core:math"
 import    "core:log"
+import    "core:math"
 
 import rl "vendor:raylib"
 
@@ -30,6 +30,13 @@ CursorState :: enum {
   PAGE_NEXT
 }
 
+ElementBorder :: struct {
+    texture      : rl.Texture,
+    draw_mode    : enum { STRETCH, TILE },
+    corner_rec   : rl.Rectangle,
+    line_rec     : rl.Rectangle
+}
+
 @(private) g_frame_delay   : int
 @(private) g_scroll_delay  : int
 
@@ -40,6 +47,7 @@ CursorState :: enum {
 @(private) g_fg_color      : rl.Color
 @(private) g_bg_color      : rl.Color
 @(private) g_line_thick    : f32
+@(private) g_border        : ElementBorder
 
 @(private) g_header_height : f32
 @(private) g_base_unit     : rl.Vector2
@@ -65,18 +73,20 @@ are_rectangles_overlapping :: #force_inline proc(
 
 init :: proc(
   font         : rl.Font,
-  pad          : f32        = 12,
-  fg_color     :            = rl.BLACK,
-  bg_color     :            = rl.WHITE,
-  line_thick   : f32        = 1,
-  base_unit    : rl.Vector2 = { 1, 1 },
-  frame_delay  :            = 1,
-  scroll_delay :            = 1,
+  pad          : f32            = 12,
+  fg_color     :                = rl.BLACK,
+  bg_color     :                = rl.WHITE,
+  border       : ElementBorder  = {},
+  line_thick   : f32            = 1,
+  base_unit    : rl.Vector2     = { 1, 1 },
+  frame_delay  :                = 1,
+  scroll_delay :                = 1,
 ) {
   g_font         = font
   g_pad          = pad
   g_fg_color     = fg_color
   g_bg_color     = bg_color
+  g_border       = border
   g_line_thick   = line_thick
   g_base_unit    = base_unit
   g_frame_delay  = (frame_delay < 0) ? 1 : frame_delay

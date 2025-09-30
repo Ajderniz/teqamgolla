@@ -56,28 +56,47 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     }
   }
 
+  win_size := rl.Vector2{ win.width, win.height }
+  #partial switch win.border_style
+  {
+  case .GLOBAL:
+    win_size.x -= g_border.line_rec.height * 2
+    win_size.y -= g_border.line_rec.height * 2
+  case .CUSTOM:
+    if nil == win.border
+    {
+      break
+    }
+    win_size.x -= win.border.line_rec.height * 2
+    win_size.y -= win.border.line_rec.height * 2
+  }
   switch &data in win.data
   {
   case TextElement:
-    if update_sizes{
-      update_text_element_buffer(&data, win.rec, font)
+    if update_sizes
+    {
+      update_text_element_buffer(&data, win_size, font)
     }
     rl.DrawRectangleRec(win.rec, bg_color)
-    draw_text_element(data, win.rec, font, fg_color)
 
   case ImageElement:
     rl.DrawRectangleRec(win.rec, bg_color)
-    draw_image_element(data, win.rec)
 
   case BoxElement:
+    border: ^ElementBorder
+    #partial switch win.border_style
+    {
+    case .GLOBAL:
+      border = &g_border
+    case .CUSTOM:
+      border = win.border
+    }
     if update_sizes
     {
-      update_box_element_content_sizes(&data, win.rec, font, pad)
+      update_box_element_content_sizes(&data, win_size, font, pad)
     }
-    draw_box_element(data, win.rec, font, pad, fg_color, bg_color, highlight)
   }
-
-  rl.DrawRectangleLinesEx(win.rec, g_line_thick, g_fg_color)
+  draw_element(win.element, font, pad, fg_color, bg_color, highlight)
 }
 
 @(private)

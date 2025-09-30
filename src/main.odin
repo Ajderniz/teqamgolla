@@ -69,7 +69,13 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  gui.init(font, base_unit=4, frame_delay=2, scroll_delay=4) 
+  border := rl.LoadTexture("../res/img/border.png")
+  eborder := gui.ElementBorder {
+    texture=border,
+    corner_rec={0,0,5,5},
+    line_rec={5,0,5,5}
+  }
+  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder)
 
   cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
@@ -81,7 +87,7 @@ main :: proc()
   txt1 := gui.Element{
     data=gui.TextElement{
       txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into math-warehouse papier-mache boy shoes."
-    }
+    },
   }
   defer gui.delete_text_element(&txt1.data.(gui.TextElement))
 
@@ -89,7 +95,7 @@ main :: proc()
     data=gui.TextElement{
       txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative.",
       scroll_type=.PAGED
-    }
+    },
   }
   defer gui.delete_text_element(&txt2.data.(gui.TextElement))
 
@@ -98,15 +104,14 @@ main :: proc()
       texture=danta,
       resize=.STRETCH
     },
-    //non_resizable={true,true}
+    non_resizable={true,true},
   }
 
   box1 := gui.Element{
     data=gui.BoxElement{
-      header="BOX1",
       content={&txt1, &img}
     },
-    non_resizable={true,false}
+    non_resizable={true,false},
   }
 
   box2 := gui.Element{
@@ -123,12 +128,22 @@ main :: proc()
         header="HEADER",
         content={&txt2, &box1},
         layout=.HORIZONTAL,
-      }
+      },
+      border_style=.GLOBAL
+    },
+  }
+
+  win2: gui.Window = {
+    draggable=true,
+    element=&gui.Element{
+      data=gui.BoxElement{
+      },
+      border_style=.LINE
     }
   }
 
   wlist := []^gui.Window{ 
-    &win1
+    &win1, &win2
   }
 
   vfps_counter := 0
@@ -207,6 +222,7 @@ main :: proc()
   }
     rl.UnloadTexture(danta)
     rl.UnloadTexture(bliss)
+    rl.UnloadTexture(border)
     rl.UnloadTexture(cursor_txr)
     rl.UnloadFont(font)
     rl.UnloadRenderTexture(rtxr)

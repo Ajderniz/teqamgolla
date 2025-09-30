@@ -14,10 +14,10 @@ BoxElement :: struct {
 
 @(private)
 update_box_element_content_sizes :: proc(
-  box    : ^BoxElement,
-  rec    : rl.Rectangle,
-  p_font : rl.Font,
-  p_pad  : f32,
+  box      : ^BoxElement,
+  size     : rl.Vector2,
+  p_font   : rl.Font,
+  p_pad    : f32,
   ) {
   IndexSizePair :: struct { index: int, size: f32 }
   isp_list: [dynamic]IndexSizePair
@@ -66,12 +66,12 @@ update_box_element_content_sizes :: proc(
   available_space: f32
   if .VERTICAL == box.layout
   {
-    available_space = rec.height
+    available_space = size.y
     available_space -= (box.header != "") ? g_header_height : 0
   }
   else
   {
-    available_space = rec.width
+    available_space = size.x
   }
   available_space -= 
     (p_pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
@@ -109,7 +109,7 @@ update_box_element_content_sizes :: proc(
 
       if .VERTICAL == box.layout
       {
-        e.width = rec.width
+        e.width =  size.x
       }
       else
       {
@@ -144,7 +144,7 @@ update_box_element_content_sizes :: proc(
       }
       else
       {
-        e.height = rec.height
+        e.height = size.y
         e.height -= (box.header != "") ? g_header_height : 0
       }
 
@@ -197,14 +197,29 @@ update_box_element_content_sizes :: proc(
   update_contents:
   for e in box.content
   {
+    e_size := rl.Vector2{ e.width, e.height }
+    #partial switch e.border_style
+    {
+    case .GLOBAL:
+      e_size.x -= g_border.line_rec.height * 2
+      e_size.y -= g_border.line_rec.height * 2
+    case .CUSTOM:
+      if nil == e.border
+      {
+        break
+      }
+      e_size.x -= e.border.line_rec.height * 2
+      e_size.y -= e.border.line_rec.height * 2
+    }
+
     #partial switch &d in e.data
     {
     case TextElement:
-      update_text_element_buffer(&d, e, ((e.font != nil) ? e.font^ : p_font))
+      update_text_element_buffer(&d, e_size, ((e.font != nil) ? e.font^:p_font))
     case BoxElement:
       update_box_element_content_sizes(
         &d,
-        e.rec,
+        e_size,
         ((e.font != nil) ? e.font^ : p_font),
         ((e.pad  != nil) ? e.pad^  : p_pad))
     }
@@ -219,6 +234,7 @@ draw_box_element :: proc(
   p_pad      :  f32,
   p_fg_color :  rl.Color,
   p_bg_color :  rl.Color,
+  border     : ^ElementBorder,
   highlight  := false,
   ) {
 
@@ -258,13 +274,19 @@ draw_box_element :: proc(
 
   rl.DrawRectangleRec(content_rec, p_bg_color)
 
+  if border != nil
+  {
+    content_rec.x += border.line_rec.height
+    content_rec.y += border.line_rec.height
+  }
+
   content_offset: f32
   for e, i in box.content
   {
-    e.x =  rec.x
+    e.x =  content_rec.x
     e.x += (.VERTICAL == box.layout) ? 0 : content_offset
 
-    e.y =  rec.y + header_offset
+    e.y =  content_rec.y
     e.y += (.VERTICAL == box.layout) ? content_offset : 0
 
     switch d in e.data
@@ -308,10 +330,15 @@ draw_box_element :: proc(
     }
     content_offset += (.VERTICAL == box.layout) ? e.height : e.width
 
+    /*
     font     := (e.font     != nil) ? e.font^     : p_font
     pad      := (e.pad      != nil) ? e.pad^      : p_pad
     fg_color := (e.fg_color != nil) ? e.fg_color^ : p_fg_color
+    bg_color := (e.bg_color != nil) ? e.bg_color^ : p_bg_color
+    */
 
+    draw_element(e, p_font, p_pad, p_fg_color, p_bg_color)
+    /*
     switch d in e.data
     {
     case TextElement:
@@ -321,13 +348,16 @@ draw_box_element :: proc(
       draw_image_element(d, e.rec)
 
     case BoxElement:
-      draw_box_element(
-        d,
-        e.rec,
-        font,
-        pad,
-        fg_color,
-        ((e.bg_color != nil) ? e.bg_color^ : p_bg_color))
+      border: ^ElementBorder
+      #partial switch e.border_style
+      {
+      case .GLOBAL:
+        border = &g_border
+      case .CUSTOM:
+        border = e.border
+      }
+      draw_box_element(d, e.rec, font, pad, fg_color, bg_color, border)
     }
+    */
   }
 }

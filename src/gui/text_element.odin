@@ -60,16 +60,16 @@ draw_text_label :: proc(
 @(private)
 update_text_element_buffer :: proc(
   txte : ^TextElement,
-  rec  : rl.Rectangle,
+  size : rl.Vector2,
   font : rl.Font
   ) {
   {
     glyph_pad    := f32(font.glyphPadding) / 2
-    max_height   := rec.height + glyph_pad
+    max_height   := size.y + glyph_pad
     glyph_height := f32(font.baseSize) + glyph_pad
     txte.glyph_size.y = math.trunc(max_height / glyph_height)
 
-    new_width := math.trunc(rec.width / font.recs[0].width)
+    new_width := math.trunc(size.x / font.recs[0].width)
     if txte.glyph_size.x != new_width
     {
       txte.glyph_size.x = new_width
