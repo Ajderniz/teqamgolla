@@ -6,15 +6,15 @@ import    "core:sort"
 
 import rl "vendor:raylib"
 
-BoxElement :: struct {
+BoxItem :: struct {
   header   : string,
-  content  : []^Element,
+  content  : []^Item,
   layout   : enum{ VERTICAL, HORIZONTAL },
 }
 
 @(private)
-update_box_element_content_sizes :: proc(
-  box      : ^BoxElement,
+update_box_item_content_sizes :: proc(
+  boxi      : ^BoxItem,
   size     : rl.Vector2,
   p_font   : rl.Font,
   p_pad    : f32,
@@ -29,14 +29,14 @@ update_box_element_content_sizes :: proc(
 
   collect_info:
   {
-    for e, i in box.content
+    for bi, i in boxi.content
     {
-      size := (.VERTICAL == box.layout) ? e.min_size.y : e.min_size.x
-      switch d in e.data
+      size := (.VERTICAL == boxi.layout) ? bi.min_size.y : bi.min_size.x
+      switch d in bi.data
       {
-      case TextElement, ImageElement:
+      case TextItem, ImageItem:
         size += p_pad
-      case BoxElement:
+      case BoxItem:
         size -= p_pad
         box_count += 1
       }
@@ -61,34 +61,34 @@ update_box_element_content_sizes :: proc(
       })
   }
 
-  remaining_elements := len(box.content)
+  remaining_items := len(boxi.content)
 
   available_space: f32
-  if .VERTICAL == box.layout
+  if .VERTICAL == boxi.layout
   {
     available_space = size.y
-    available_space -= (box.header != "") ? g_header_height : 0
+    available_space -= (boxi.header != "") ? g_header_height : 0
   }
   else
   {
     available_space = size.x
   }
   available_space -= 
-    (p_pad * (f32(remaining_elements) + 1)) - (double_pad * f32(box_count))
+    (p_pad * (f32(remaining_items) + 1)) - (double_pad * f32(box_count))
 
   constrained_count: int
 
   distribute_space:
   for isp in isp_list
   {
-    e := box.content[isp.index]
+    e := boxi.content[isp.index]
 
     if e.non_resizable.x && e.non_resizable.y
     {
       e.width  = e.min_size.x
       e.height = e.min_size.y
-      available_space -= (.VERTICAL == box.layout) ? e.height : e.width
-      remaining_elements -= 1
+      available_space -= (.VERTICAL == boxi.layout) ? e.height : e.width
+      remaining_items -= 1
       constrained_count += 1
 
       continue
@@ -96,18 +96,18 @@ update_box_element_content_sizes :: proc(
 
     is_constrained: bool
 
-    share := math.trunc(available_space / f32(remaining_elements))
+    share := math.trunc(available_space / f32(remaining_items))
 
     update_width:
     {
       if e.non_resizable.x
       {
         e.width = e.min_size.x
-        is_constrained = (.HORIZONTAL == box.layout) ? true : false
+        is_constrained = (.HORIZONTAL == boxi.layout) ? true : false
         break update_width
       }
 
-      if .VERTICAL == box.layout
+      if .VERTICAL == boxi.layout
       {
         e.width =  size.x
       }
@@ -124,8 +124,8 @@ update_box_element_content_sizes :: proc(
 
       #partial switch d in e.data
       {
-      case TextElement, ImageElement:
-        e.width  -= (.VERTICAL == box.layout) ? double_pad : 0
+      case TextItem, ImageItem:
+        e.width  -= (.VERTICAL == boxi.layout) ? double_pad : 0
       }
     }
 
@@ -134,18 +134,18 @@ update_box_element_content_sizes :: proc(
       if e.non_resizable.y
       {
         e.height = e.min_size.y
-        is_constrained = (.VERTICAL == box.layout) ? true : false
+        is_constrained = (.VERTICAL == boxi.layout) ? true : false
         break update_height
       }
 
-      if .VERTICAL == box.layout
+      if .VERTICAL == boxi.layout
       {
         e.height = (share < e.min_size.y) ? e.min_size.y : share
       }
       else
       {
         e.height = size.y
-        e.height -= (box.header != "") ? g_header_height : 0
+        e.height -= (boxi.header != "") ? g_header_height : 0
       }
 
       if e.min_size.y <= e.max_size.y
@@ -156,34 +156,34 @@ update_box_element_content_sizes :: proc(
 
       #partial switch d in e.data
       {
-      case TextElement, ImageElement:
-        e.height -= (.VERTICAL == box.layout) ? 0 : double_pad
+      case TextItem, ImageItem:
+        e.height -= (.VERTICAL == boxi.layout) ? 0 : double_pad
       }
     }
 
     constrained_count += (is_constrained) ? 1 : 0
 
-    available_space -= (.VERTICAL == box.layout) ? e.height : e.width
-    remaining_elements -= 1
+    available_space -= (.VERTICAL == boxi.layout) ? e.height : e.width
+    remaining_items -= 1
   }
 
   adjust_for_unused_space:
   if 0 < available_space
   {
-    unconstrained_count := len(box.content) - constrained_count
+    unconstrained_count := len(boxi.content) - constrained_count
     if unconstrained_count <= 0
     {
       break adjust_for_unused_space
     }
 
     share := math.trunc(available_space / f32(unconstrained_count))
-    for e, i in box.content
+    for e, i in boxi.content
     {
       if e.min_size.x <= e.max_size.x || e.min_size.y <= e.max_size.y
       {
         continue
       }
-      if .VERTICAL == box.layout
+      if .VERTICAL == boxi.layout
       {
         e.height += (!e.non_resizable.y) ? share : e.height
       }
@@ -195,9 +195,9 @@ update_box_element_content_sizes :: proc(
   }
 
   update_contents:
-  for e in box.content
+  for e in boxi.content
   {
-    border: ^ElementBorder
+    border: ^ItemBorder
     #partial switch e.border_style
     {
     case .GLOBAL:
@@ -220,10 +220,10 @@ update_box_element_content_sizes :: proc(
 
     #partial switch &d in e.data
     {
-    case TextElement:
-      update_text_element_buffer(&d, e_size, ((e.font != nil) ? e.font^:p_font))
-    case BoxElement:
-      update_box_element_content_sizes(
+    case TextItem:
+      update_text_item_buffer(&d, e_size, ((e.font != nil) ? e.font^:p_font))
+    case BoxItem:
+      update_box_item_content_sizes(
         &d,
         e_size,
         ((e.font != nil) ? e.font^ : p_font),
@@ -233,14 +233,14 @@ update_box_element_content_sizes :: proc(
 }
 
 @(private)
-draw_box_element :: proc(
-  box        :  BoxElement,
+draw_box_item :: proc(
+  boxi        :  BoxItem,
   rec        :  rl.Rectangle,
   p_font     :  rl.Font,
   p_pad      :  f32,
   p_fg_color :  rl.Color,
-  p_bg       :  ElementBackground,
-  border     : ^ElementBorder,
+  p_bg       :  ItemBackground,
+  border     : ^ItemBorder,
   highlight  := false,
   ) {
 
@@ -249,7 +249,7 @@ draw_box_element :: proc(
   // HEADER ====================================================================
 
   header_offset: f32
-  if box.header != ""
+  if boxi.header != ""
   {
     header_offset = g_header_height
     header_rec := rec
@@ -265,7 +265,7 @@ draw_box_element :: proc(
     header_rec.y += math.trunc(p_pad * 0.25)
     header_rec.width -= double_pad
     draw_text_label(
-      box.header,
+      boxi.header,
       {header_rec.x, header_rec.y},
       header_rec.width,
       g_font,
@@ -278,7 +278,7 @@ draw_box_element :: proc(
   content_rec.y      += header_offset
   content_rec.height -= header_offset
 
-  draw_element_background(p_bg, content_rec)
+  draw_item_background(p_bg, content_rec)
 
   if border != nil
   {
@@ -287,17 +287,17 @@ draw_box_element :: proc(
   }
 
   content_offset: f32
-  for e, i in box.content
+  for e, i in boxi.content
   {
     e.x =  content_rec.x
-    e.x += (.VERTICAL == box.layout) ? 0 : content_offset
+    e.x += (.VERTICAL == boxi.layout) ? 0 : content_offset
 
     e.y =  content_rec.y
-    e.y += (.VERTICAL == box.layout) ? content_offset : 0
+    e.y += (.VERTICAL == boxi.layout) ? content_offset : 0
 
     switch d in e.data
     {
-    case TextElement, ImageElement:
+    case TextItem, ImageItem:
       must_add_pad := false
       if 0 == i
       {
@@ -305,13 +305,13 @@ draw_box_element :: proc(
       }
       else if 1 <= i
       {
-        #partial switch pd in box.content[i-1].data
+        #partial switch pd in boxi.content[i-1].data
         {
-        case TextElement, ImageElement:
+        case TextItem, ImageItem:
           must_add_pad = true
         }
       }
-      if .VERTICAL == box.layout
+      if .VERTICAL == boxi.layout
       {
         e.x += p_pad
         e.y += (must_add_pad) ? p_pad : 0
@@ -323,19 +323,19 @@ draw_box_element :: proc(
       }
       content_offset += (must_add_pad) ? p_pad : 0
 
-    case BoxElement:
+    case BoxItem:
       if 1 <= i
       {
-        #partial switch d in box.content[i-1].data
+        #partial switch d in boxi.content[i-1].data
         {
-        case BoxElement:
-          e.y -= (.VERTICAL == box.layout) ? p_pad : 0
-          e.x -= (.VERTICAL == box.layout) ? 0   : p_pad
+        case BoxItem:
+          e.y -= (.VERTICAL == boxi.layout) ? p_pad : 0
+          e.x -= (.VERTICAL == boxi.layout) ? 0   : p_pad
         }
       }
     }
-    content_offset += (.VERTICAL == box.layout) ? e.height : e.width
+    content_offset += (.VERTICAL == boxi.layout) ? e.height : e.width
 
-    draw_element(e, p_font, p_pad, p_fg_color, p_bg)
+    draw_item(e, p_font, p_pad, p_fg_color, p_bg)
   }
 }

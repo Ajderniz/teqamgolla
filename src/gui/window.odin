@@ -8,13 +8,13 @@ import rl "vendor:raylib"
 import    "../global"
 
 Window :: struct {
-  draggable     : bool,
-  act_state     : ActionState,
+  draggable  : bool,
+  act_state  : ActionState,
 
-  maximized     : bool,
-  saved_rec     : rl.Rectangle,
+  maximized  : bool,
+  saved_rec  : rl.Rectangle,
 
-  using element : ^Element
+  using item : ^Item
 }
 
 @(private)
@@ -27,7 +27,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 
   if win.min_size.x <= 0 || win.min_size.y <= 0
   {
-    configure_element_min_size(win.element, font, pad)
+    configure_item_min_size(win.item, font, pad)
   }
 
   if 2 <= g_base_unit.x && 2 <= g_base_unit.y
@@ -56,7 +56,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     }
   }
 
-  border: ^ElementBorder
+  border: ^ItemBorder
   #partial switch win.border_style
   {
   case .GLOBAL:
@@ -79,23 +79,23 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 
   switch &data in win.data
   {
-  case TextElement:
+  case TextItem:
     if update_sizes
     {
-      update_text_element_buffer(&data, win_size, font)
+      update_text_item_buffer(&data, win_size, font)
     }
-    draw_element_background(bg, win.rec)
+    draw_item_background(bg, win.rec)
 
-  case ImageElement:
-    draw_element_background(bg, win.rec)
+  case ImageItem:
+    draw_item_background(bg, win.rec)
 
-  case BoxElement:
+  case BoxItem:
     if update_sizes
     {
-      update_box_element_content_sizes(&data, win_size, font, pad)
+      update_box_item_content_sizes(&data, win_size, font, pad)
     }
   }
-  draw_element(win.element, font, pad, fg_color, bg, highlight)
+  draw_item(win.item, font, pad, fg_color, bg, highlight)
 }
 
 @(private)
@@ -180,7 +180,7 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
       }
       for j in 0..<i
       {
-        if is_v2_within_rec(mouse_pos, list[j].element.rec)
+        if is_v2_within_rec(mouse_pos, list[j].item.rec)
         {
           continue windows
         }
@@ -204,39 +204,39 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         button_pressed = .MIDDLE
       }
 
-      element := get_element_under_mouse(win.element, mouse_pos)
+      item := get_item_under_mouse(win.item, mouse_pos)
 
-      hovering_txt_element := false
-      txt_element_dir: enum{PREV, NEXT}
-      if element != nil
+      hovering_txt_item := false
+      txt_item_dir: enum{PREV, NEXT}
+      if item != nil
       {
-        #partial switch d in element.data
+        #partial switch d in item.data
         {
-        case TextElement:
-          hovering_txt_element = true
+        case TextItem:
+          hovering_txt_item = true
           if .VERTICAL == d.scroll_type
           {
-            if mouse_pos.y <= element.y + math.trunc(element.height / 2)
+            if mouse_pos.y <= item.y + math.trunc(item.height / 2)
             {
-              txt_element_dir = .PREV
+              txt_item_dir = .PREV
               g_cursor_state = .SCROLL_UP
             }
             else
             {
-              txt_element_dir = .NEXT
+              txt_item_dir = .NEXT
               g_cursor_state = .SCROLL_DOWN
             }
           }
           else // PAGED
           {
-            if mouse_pos.x <= element.x + math.trunc(element.width / 2)
+            if mouse_pos.x <= item.x + math.trunc(item.width / 2)
             {
-              txt_element_dir = .PREV
+              txt_item_dir = .PREV
               g_cursor_state = .PAGE_PREV
             }
             else
             {
-              txt_element_dir = .NEXT
+              txt_item_dir = .NEXT
               g_cursor_state = .PAGE_NEXT
             }
           }
@@ -246,12 +246,12 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
       #partial switch button_pressed
       {
       case .LEFT:
-        if hovering_txt_element
+        if hovering_txt_item
         {
-          txte := &element.data.(TextElement)
+          txte := &item.data.(TextItem)
           if .VERTICAL == txte.scroll_type
           {
-            if .PREV == txt_element_dir
+            if .PREV == txt_item_dir
             {
               win.act_state = .SCROLL_UP
             }
@@ -262,13 +262,13 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
           }
           else
           {
-            if .PREV == txt_element_dir
+            if .PREV == txt_item_dir
             {
-              scroll_text_element(txte, .PREV)
+              scroll_text_item(txte, .PREV)
             }
             else
             {
-              scroll_text_element(txte, .NEXT)
+              scroll_text_item(txte, .NEXT)
             }
           }
         }
@@ -335,18 +335,18 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 
       if wheel_move != 0
       {
-        if !hovering_txt_element
+        if !hovering_txt_item
         {
           break windows
         }
-        txt_element := &element.data.(TextElement)
+        txt_item := &item.data.(TextItem)
         if wheel_move < 0
         {
-          scroll_text_element(txt_element, .NEXT)
+          scroll_text_item(txt_item, .NEXT)
         }
         else
         {
-          scroll_text_element(txt_element, .PREV)
+          scroll_text_item(txt_item, .PREV)
         }
         break windows
       }
@@ -383,31 +383,31 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         break action
       }
 
-      element := get_element_under_mouse(win.element, mouse_pos)
-      if nil == element
+      item := get_item_under_mouse(win.item, mouse_pos)
+      if nil == item
       {
         win.act_state = .NONE
         break windows
       }
-      txt_element: ^TextElement
-      #partial switch &d in element.data
+      txt_item: ^TextItem
+      #partial switch &d in item.data
       {
-      case TextElement:
-        txt_element = &d
+      case TextItem:
+        txt_item = &d
       }
-      if nil == txt_element
+      if nil == txt_item
       {
         win.act_state = .NONE
         break windows
       }
-      if mouse_pos.y <= element.y + math.trunc(element.height / 2)
+      if mouse_pos.y <= item.y + math.trunc(item.height / 2)
       {
-        scroll_text_element(txt_element, .PREV)
+        scroll_text_item(txt_item, .PREV)
         g_cursor_state = .SCROLL_UP
       }
       else
       {
-        scroll_text_element(txt_element, .NEXT)
+        scroll_text_item(txt_item, .NEXT)
         g_cursor_state = .SCROLL_DOWN
       }
     }

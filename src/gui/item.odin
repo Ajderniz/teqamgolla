@@ -5,13 +5,13 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
-ElementBackground :: struct {
+ItemBackground :: struct {
   color     : rl.Color,
   texture   : ^rl.Texture,
   draw_mode : enum { STRETCH, TILE }
 }
 
-ElementBorderRectangles :: struct {
+ItemBorderRectangles :: struct {
   corner_rec : struct {
     using default : rl.Rectangle,
     tl            : ^rl.Rectangle,
@@ -28,14 +28,14 @@ ElementBorderRectangles :: struct {
   }
 }
 
-ElementBorder :: struct {
+ItemBorder :: struct {
   texture    : rl.Texture,
   draw_mode  : enum { STRETCH, TILE },
-  using recs : ElementBorderRectangles
+  using recs : ItemBorderRectangles
 }
 
-Element :: struct {
-  data            : union { TextElement, ImageElement, BoxElement },
+Item :: struct {
+  data            : union { TextItem, ImageItem, BoxItem },
 
   using rec     : rl.Rectangle,
   min_size      : rl.Vector2,
@@ -45,29 +45,29 @@ Element :: struct {
   font          : ^rl.Font,
   pad           : ^f32,
   fg_color      : ^rl.Color,
-  bg            : ^ElementBackground,
+  bg            : ^ItemBackground,
 
   border_style  : enum { NONE, LINE, GLOBAL, CUSTOM },
-  border        : ^ElementBorder
+  border        : ^ItemBorder
 }
 
 @(private)
-get_element_under_mouse :: proc(
-  element: ^Element,
-  mouse_pos: rl.Vector2) -> ^Element
+get_item_under_mouse :: proc(
+  item: ^Item,
+  mouse_pos: rl.Vector2) -> ^Item
 {
-  if !is_v2_within_rec(mouse_pos, element.rec)
+  if !is_v2_within_rec(mouse_pos, item.rec)
   {
     return nil
   }
-  switch d in element.data
+  switch d in item.data
   {
-  case TextElement, ImageElement:
-    return element
-  case BoxElement:
+  case TextItem, ImageItem:
+    return item
+  case BoxItem:
     for e in d.content
     {
-      hovered := get_element_under_mouse(e, mouse_pos)
+      hovered := get_item_under_mouse(e, mouse_pos)
       if hovered != nil
       {
         return hovered
@@ -77,39 +77,36 @@ get_element_under_mouse :: proc(
   return nil
 }
 
-configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
+configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
 {
-  font := (element.font != nil) ? element.font^ : p_font
+  font := (item.font != nil) ? item.font^ : p_font
 
-  switch data in element.data
+  switch data in item.data
   {
-  case TextElement:
+  case TextItem:
     glyph_size := rl.Vector2 {
       font.recs[0].width,
       f32(font.baseSize) + math.trunc(f32(font.glyphPadding / 2))
     }
-    element.min_size.x =
-      (element.min_size.x < glyph_size.x) ? glyph_size.x : element.min_size.x
-    element.min_size.y =
-      (element.min_size.y<(glyph_size.y*3))? (glyph_size.y*3):element.min_size.y
+    item.min_size.x=(item.min_size.x<glyph_size.x)? glyph_size.x:item.min_size.x
+    item.min_size.y =
+      (item.min_size.y<(glyph_size.y*3))? (glyph_size.y*3):item.min_size.y
 
-  case ImageElement:
+  case ImageItem:
     og_size := rl.Vector2{ f32(data.texture.width),f32(data.texture.height) }
-    element.min_size.x =
-      (element.min_size.x < og_size.x) ? og_size.x : element.min_size.x
-    element.min_size.y =
-      (element.min_size.y < og_size.y) ? og_size.y : element.min_size.y
+    item.min_size.x = (item.min_size.x < og_size.x)? og_size.x : item.min_size.x
+    item.min_size.y = (item.min_size.y < og_size.y)? og_size.y : item.min_size.y
 
-  case BoxElement:
+  case BoxItem:
 
-    pad := (element.pad != nil) ? element.pad^ : p_pad
+    pad := (item.pad != nil) ? item.pad^ : p_pad
     double_pad := pad * 2
 
     if len(data.content) <= 0
     {
-      element.min_size.x =  font.recs[0].width + double_pad
-      element.min_size.y =  f32(font.baseSize) + double_pad
-      element.min_size.y += (data.header != "") ? g_header_height : 0
+      item.min_size.x =  font.recs[0].width + double_pad
+      item.min_size.y =  f32(font.baseSize) + double_pad
+      item.min_size.y += (data.header != "") ? g_header_height : 0
       return
     }
 
@@ -117,16 +114,16 @@ configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
 
     for e in data.content
     {
-      configure_element_min_size(e, font, pad)
+      configure_item_min_size(e, font, pad)
 
       this_min_size := e.min_size
       switch d in e.data
       {
-      case TextElement, ImageElement:
+      case TextItem, ImageItem:
         this_min_size.x += (.VERTICAL == data.layout) ? double_pad : pad
         this_min_size.y += (.VERTICAL == data.layout) ? pad : double_pad
 
-      case BoxElement:
+      case BoxItem:
         this_min_size.x -= (.VERTICAL == data.layout) ? 0 : pad
         this_min_size.y -= (.VERTICAL == data.layout) ? pad : 0
       }
@@ -146,39 +143,39 @@ configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
     min_size.y += (.VERTICAL == data.layout) ? pad : 0
     min_size.y += (data.header != "") ? g_header_height : 0
 
-    element.min_size.x =
-      (element.min_size.x < min_size.x) ? min_size.x : element.min_size.x
-    element.min_size.y =
-      (element.min_size.y < min_size.y) ? min_size.y : element.min_size.y
+    item.min_size.x =
+      (item.min_size.x < min_size.x) ? min_size.x : item.min_size.x
+    item.min_size.y =
+      (item.min_size.y < min_size.y) ? min_size.y : item.min_size.y
   }
-  if .NONE == element.border_style ||
-     .LINE == element.border_style ||
-     (.CUSTOM == element.border_style && nil == element.border)
+  if .NONE == item.border_style ||
+     .LINE == item.border_style ||
+     (.CUSTOM == item.border_style && nil == item.border)
   {
     return
   }
 
-  border: ^ElementBorder
-  #partial switch element.border_style
+  border: ^ItemBorder
+  #partial switch item.border_style
   {
   case .GLOBAL:
     border = &g_border
   case .CUSTOM:
-    border = element.border
+    border = item.border
   }
   line_rec := &border.line_rec
 
-  element.min_size.x+=(line_rec.left!=nil)? line_rec.left.height:line_rec.height
-  element.min_size.x += (line_rec.right != nil) ? line_rec.right.height :
+  item.min_size.x+=(line_rec.left!=nil)? line_rec.left.height:line_rec.height
+  item.min_size.x += (line_rec.right != nil) ? line_rec.right.height :
                                                   line_rec.height
-  element.min_size.y += (line_rec.top!=nil)? line_rec.top.height:line_rec.height
-  element.min_size.y += (line_rec.bot != nil) ? line_rec.bot.height :
+  item.min_size.y += (line_rec.top!=nil)? line_rec.top.height:line_rec.height
+  item.min_size.y += (line_rec.bot != nil) ? line_rec.bot.height :
                                                    line_rec.height
 }
 
 @(private)
-draw_element_background :: proc(
-  bg       : ElementBackground,
+draw_item_background :: proc(
+  bg       : ItemBackground,
   rec      : rl.Rectangle
   ) {
   if nil == bg.texture
@@ -222,33 +219,33 @@ draw_element_background :: proc(
 }
 
 @(private)
-draw_element :: proc(
-  element    :  ^Element,
+draw_item :: proc(
+  item       :  ^Item,
   p_font     :  rl.Font,
   p_pad      :  f32,
   p_fg_color :  rl.Color,
-  p_bg       :  ElementBackground,
+  p_bg       :  ItemBackground,
   highlight  := false)
 {
-  if nil == element
+  if nil == item
   {
     return
   }
-  font     := (element.font     != nil) ? element.font^     : p_font
-  pad      := (element.pad      != nil) ? element.pad^      : p_pad
-  fg_color := (element.fg_color != nil) ? element.fg_color^ : p_fg_color
-  bg       := (element.bg       != nil) ? element.bg^       : p_bg
+  font     := (item.font     != nil) ? item.font^     : p_font
+  pad      := (item.pad      != nil) ? item.pad^      : p_pad
+  fg_color := (item.fg_color != nil) ? item.fg_color^ : p_fg_color
+  bg       := (item.bg       != nil) ? item.bg^       : p_bg
 
-  border: ^ElementBorder
-  #partial switch element.border_style
+  border: ^ItemBorder
+  #partial switch item.border_style
   {
   case .GLOBAL:
     border = &g_border
   case .CUSTOM:
-    border = element.border
+    border = item.border
   }
 
-  border_recs: ElementBorderRectangles
+  border_recs: ItemBorderRectangles
   if border != nil
   {
     line_rec   := &border.line_rec
@@ -271,12 +268,12 @@ draw_element :: proc(
     }
   }
 
-  draw_element:
+  draw_item:
   {
-    rec := element.rec
-    #partial switch data in element.data
+    rec := item.rec
+    #partial switch data in item.data
     {
-    case TextElement, ImageElement:
+    case TextItem, ImageItem:
       if border != nil
       {
         line_rec := &border_recs.line_rec
@@ -292,28 +289,28 @@ draw_element :: proc(
       }
     }
 
-    switch data in element.data
+    switch data in item.data
     {
-    case TextElement:
-      draw_text_element(data, rec, font, fg_color)
-    case ImageElement:
-      draw_image_element(data, rec)
-    case BoxElement:
-      draw_box_element(data, rec, font, pad, fg_color, bg, border, highlight)
+    case TextItem:
+      draw_text_item(data, rec, font, fg_color)
+    case ImageItem:
+      draw_image_item(data, rec)
+    case BoxItem:
+      draw_box_item(data, rec, font, pad, fg_color, bg, border, highlight)
     }
   }
 
   draw_border:
   {
-    if .NONE == element.border_style
+    if .NONE == item.border_style
     {
       return
     }
 
-    rec := element.rec
-    #partial switch data in element.data
+    rec := item.rec
+    #partial switch data in item.data
     {
-    case BoxElement:
+    case BoxItem:
       if data.header != ""
       {
         rec.y      += g_header_height
@@ -412,12 +409,12 @@ draw_element :: proc(
     }
     draw_corners:
     {
-      draw_element_background(
+      draw_item_background(
         bg,
         { rec.x, rec.y, corner_rec.tl.width, corner_rec.tl.height })
       rl.DrawTextureRec(border.texture, corner_rec.tl^, {rec.x,rec.y}, fg_color)
 
-      draw_element_background(
+      draw_item_background(
         bg,
         {
           rec.x + rec.width - corner_rec.tr.width,
@@ -433,7 +430,7 @@ draw_element :: proc(
         90,
         fg_color)
 
-      draw_element_background(
+      draw_item_background(
         bg,
         {
           rec.x + rec.width - corner_rec.br.width,
@@ -454,7 +451,7 @@ draw_element :: proc(
         180,
         fg_color)
 
-      draw_element_background(
+      draw_item_background(
         bg,
         {
           rec.x,

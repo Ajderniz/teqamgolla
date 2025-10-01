@@ -38,10 +38,10 @@ CursorState :: enum {
 @(private) g_font          : rl.Font
 @(private) g_pad           : f32
 @(private) g_fg_color      : rl.Color
-@(private) g_bg            : ElementBackground
+@(private) g_bg            : ItemBackground
 
 @(private) g_line_thick    : f32
-@(private) g_border        : ElementBorder
+@(private) g_border        : ItemBorder
 
 @(private) g_header_height : f32
 @(private) g_base_unit     : rl.Vector2
@@ -67,14 +67,14 @@ are_rectangles_overlapping :: #force_inline proc(
 
 init :: proc(
   font         : rl.Font,
-  pad          : f32               = 12,
-  fg_color     :                   = rl.BLACK,
-  bg           : ElementBackground = { color=rl.WHITE },
-  border       : ElementBorder     = {},
-  line_thick   : f32               = 1,
-  base_unit    : rl.Vector2        = { 1, 1 },
-  frame_delay  :                   = 1,
-  scroll_delay :                   = 1,
+  pad          : f32            = 12,
+  fg_color     :                = rl.BLACK,
+  bg           : ItemBackground = { color=rl.WHITE },
+  border       : ItemBorder     = {},
+  line_thick   : f32            = 1,
+  base_unit    : rl.Vector2     = { 1, 1 },
+  frame_delay  :                = 1,
+  scroll_delay :                = 1,
 ) {
   g_font         = font
   g_pad          = pad

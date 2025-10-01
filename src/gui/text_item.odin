@@ -6,7 +6,7 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-TextElement :: struct {
+TextItem :: struct {
   txt         : string,
   buffer      : [dynamic]string,
   glyph_size  : rl.Vector2,
@@ -58,8 +58,8 @@ draw_text_label :: proc(
 }
 
 @(private)
-update_text_element_buffer :: proc(
-  txte : ^TextElement,
+update_text_item_buffer :: proc(
+  txti : ^TextItem,
   size : rl.Vector2,
   font : rl.Font
   ) {
@@ -67,13 +67,13 @@ update_text_element_buffer :: proc(
     glyph_pad    := f32(font.glyphPadding) / 2
     max_height   := size.y + glyph_pad
     glyph_height := f32(font.baseSize) + glyph_pad
-    txte.glyph_size.y = math.trunc(max_height / glyph_height)
+    txti.glyph_size.y = math.trunc(max_height / glyph_height)
 
     new_width := math.trunc(size.x / font.recs[0].width)
-    if txte.glyph_size.x != new_width
+    if txti.glyph_size.x != new_width
     {
-      txte.glyph_size.x = new_width
-      txte.offset = 0
+      txti.glyph_size.x = new_width
+      txti.offset = 0
     }
     else 
     {
@@ -81,28 +81,28 @@ update_text_element_buffer :: proc(
     }
   }
 
-  if txte.buffer != nil
+  if txti.buffer != nil
   {
-    clear(&txte.buffer)
+    clear(&txti.buffer)
   }
 
   start := 0
 
   for i := 1;; i += 1
   {
-    end := start + int(txte.glyph_size.x)
+    end := start + int(txti.glyph_size.x)
     line: string
     ok: bool
 
-    if end < (str.rune_count(txte.txt)  )
+    if end < (str.rune_count(txti.txt)  )
     {
-      line, ok = str.substring(txte.txt, start, end)
+      line, ok = str.substring(txti.txt, start, end)
     }
     else
     {
-      end = str.rune_count(txte.txt)
-      line, ok = str.substring(txte.txt, start, end)
-      append(&txte.buffer, line)
+      end = str.rune_count(txti.txt)
+      line, ok = str.substring(txti.txt, start, end)
+      append(&txti.buffer, line)
       break
     }
 
@@ -132,69 +132,69 @@ update_text_element_buffer :: proc(
     }
     if 0 < len(line)
     {
-      append(&txte.buffer, line)
+      append(&txti.buffer, line)
     }
     start = (has_spaces) ? (end + 1) : end
   }
 }
 
 @(private)
-scroll_text_element :: proc(txte: ^TextElement, dir: enum{PREV, NEXT})
+scroll_text_item :: proc(txti: ^TextItem, dir: enum{PREV, NEXT})
 {
-  if .VERTICAL == txte.scroll_type
+  if .VERTICAL == txti.scroll_type
   {
     if .NEXT == dir
     {
-      limit := len(txte.buffer) - int(txte.glyph_size.y)
+      limit := len(txti.buffer) - int(txti.glyph_size.y)
       limit =  (limit < 0) ? 0 : limit
-      txte.offset += (txte.offset < uint(limit)) ? 1 : 0
+      txti.offset += (txti.offset < uint(limit)) ? 1 : 0
     }
     else
     {
-      txte.offset -= (0 < txte.offset) ? 1 : 0
+      txti.offset -= (0 < txti.offset) ? 1 : 0
     }
   }
   else // PAGED
   {
     if .NEXT == dir
     {
-      new_offset := txte.offset + uint(txte.glyph_size.y)
-      new_offset -= (new_offset < uint(len(txte.buffer))) ? 1 : 0
+      new_offset := txti.offset + uint(txti.glyph_size.y)
+      new_offset -= (new_offset < uint(len(txti.buffer))) ? 1 : 0
       new_offset -= (0 < new_offset)                      ? 1 : 0
-      txte.offset =(uint(len(txte.buffer)-1)<=new_offset)?txte.offset:new_offset
+      txti.offset =(uint(len(txti.buffer)-1)<=new_offset)?txti.offset:new_offset
     }
     else
     {
-      new_offset := int(txte.offset) - (int(txte.glyph_size.y))
-      new_offset += (new_offset < len(txte.buffer)) ? 1 : 0
+      new_offset := int(txti.offset) - (int(txti.glyph_size.y))
+      new_offset += (new_offset < len(txti.buffer)) ? 1 : 0
       new_offset += (0 < new_offset)                ? 1 : 0
-      txte.offset = (new_offset < 0) ? 0 : uint(new_offset)
+      txti.offset = (new_offset < 0) ? 0 : uint(new_offset)
     }
   }
 }
 
 @(private)
-draw_text_element :: proc(
-  txte     : TextElement,
+draw_text_item :: proc(
+  txti     : TextItem,
   rec      : rl.Rectangle,
   font     : rl.Font,
   fg_color : rl.Color
   ) {
-  start := txte.offset
-  end   := txte.offset + uint(txte.glyph_size.y)
+  start := txti.offset
+  end   := txti.offset + uint(txti.glyph_size.y)
 
   draw_triangles: {
 
-    start += (0 < txte.offset)              ? 1 : 0
-    end   -= (end < uint(len(txte.buffer))) ? 1 : 0
+    start += (0 < txti.offset)              ? 1 : 0
+    end   -= (end < uint(len(txti.buffer))) ? 1 : 0
 
     after_text := rec.y + rec.height - f32(font.baseSize)
-    if .VERTICAL == txte.scroll_type
+    if .VERTICAL == txti.scroll_type
     {
       center := rec.x + math.trunc(rec.width / 2)
       half_font_width := f32(font.recs[0].width / 2)
 
-      if 0 < txte.offset
+      if 0 < txti.offset
       {
         plus_height := rec.y + f32(font.baseSize)
         rl.DrawTriangle(
@@ -204,7 +204,7 @@ draw_text_element :: proc(
           fg_color
           )
       }
-      if end < uint(len(txte.buffer))
+      if end < uint(len(txti.buffer))
       {
         rl.DrawTriangle(
           {center + half_font_width, after_text},
@@ -218,7 +218,7 @@ draw_text_element :: proc(
     {
       font_width       := f32(font.recs[0].width)
       half_font_height := f32(font.baseSize / 2)
-      if 0 < txte.offset
+      if 0 < txti.offset
       {
         plus_width := rec.x + font_width
         rl.DrawTriangle(
@@ -227,7 +227,7 @@ draw_text_element :: proc(
           {plus_width, rec.y + f32(font.baseSize)},
           fg_color)
       }
-      if end < uint(len(txte.buffer))
+      if end < uint(len(txti.buffer))
       {
         right_of_text := rec.x + rec.width - font_width
         rl.DrawTriangle(
@@ -238,16 +238,16 @@ draw_text_element :: proc(
       }
     }
   }
-  end = (uint(len(txte.buffer)) < end) ? len(txte.buffer) : end
+  end = (uint(len(txti.buffer)) < end) ? len(txti.buffer) : end
   start = (end < start) ? end : start
 
-  joined_txt := str.join(txte.buffer[start:end], "\n")
+  joined_txt := str.join(txti.buffer[start:end], "\n")
   joined_txt_cstring := str.clone_to_cstring(joined_txt)
   defer delete(joined_txt)
   defer delete(joined_txt_cstring)
 
   txt_pos := rl.Vector2{rec.x, rec.y}
-  txt_pos.y += (0 < txte.offset)?f32(font.baseSize)+f32(font.glyphPadding/2) : 0
+  txt_pos.y += (0 < txti.offset)?f32(font.baseSize)+f32(font.glyphPadding/2) : 0
 
   rl.DrawTextEx(
     font,
@@ -258,7 +258,7 @@ draw_text_element :: proc(
     fg_color)
 }
 
-delete_text_element :: #force_inline proc(element: ^TextElement)
+delete_text_item :: #force_inline proc(item: ^TextItem)
 {
-  delete(element.buffer)
+  delete(item.buffer)
 }

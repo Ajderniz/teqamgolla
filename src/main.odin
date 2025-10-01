@@ -70,7 +70,7 @@ main :: proc()
   }
 
   border := rl.LoadTexture("../res/img/border.png")
-  eborder := gui.ElementBorder {
+  iborder := gui.ItemBorder {
     texture=border,
     corner_rec={
       default={0,0,5,5},
@@ -79,8 +79,7 @@ main :: proc()
       default={5,0,5,5},
     },
   }
-  background := rl.LoadTexture("../res/img/background.png")
-  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder)
+  gui.init(font, base_unit=4, frame_delay=2, scroll_delay=4, border=iborder)
 
   cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
@@ -89,38 +88,38 @@ main :: proc()
 
   rl.SetTargetFPS(g.FPS)
 
-  txt1 := gui.Element{
-    data=gui.TextElement{
+  txt1 := gui.Item{
+    data=gui.TextItem{
       txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into  math-warehouse papier-mache boy shoes."
     },
   }
-  defer gui.delete_text_element(&txt1.data.(gui.TextElement))
+  defer gui.delete_text_item(&txt1.data.(gui.TextItem))
 
-  txt2 := gui.Element{
-    data=gui.TextElement{
+  txt2 := gui.Item{
+    data=gui.TextItem{
       txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative.",
       scroll_type=.PAGED
     },
   }
-  defer gui.delete_text_element(&txt2.data.(gui.TextElement))
+  defer gui.delete_text_item(&txt2.data.(gui.TextItem))
 
-  img := gui.Element{
-    data=gui.ImageElement{
+  img := gui.Item{
+    data=gui.ImageItem{
       texture=danta,
       resize=.STRETCH
     },
     non_resizable={true,true},
   }
 
-  box1 := gui.Element{
-    data=gui.BoxElement{
+  box1 := gui.Item{
+    data=gui.BoxItem{
       content={&txt1, &img}
     },
     non_resizable={true,false},
   }
 
-  box2 := gui.Element{
-    data=gui.BoxElement{
+  box2 := gui.Item{
+    data=gui.BoxItem{
       header="BOX2",
       content={&txt2}
     }
@@ -128,8 +127,8 @@ main :: proc()
 
   win1: gui.Window = {
     draggable=true,
-    element=&gui.Element {
-      data=gui.BoxElement{
+    item=&gui.Item {
+      data=gui.BoxItem{
         header="HEADER",
         content={&txt2, &box1},
         layout=.HORIZONTAL,
@@ -140,8 +139,8 @@ main :: proc()
 
   win2: gui.Window = {
     draggable=true,
-    element=&gui.Element{
-      data=gui.BoxElement{
+    item=&gui.Item{
+      data=gui.BoxItem{
       },
       border_style=.LINE
     }
