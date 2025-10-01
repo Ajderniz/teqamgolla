@@ -56,20 +56,27 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     }
   }
 
-  win_size := rl.Vector2{ win.width, win.height }
+  border: ^ElementBorder
   #partial switch win.border_style
   {
   case .GLOBAL:
-    win_size.x -= g_border.line_rec.height * 2
-    win_size.y -= g_border.line_rec.height * 2
+    border = &g_border
   case .CUSTOM:
-    if nil == win.border
-    {
-      break
-    }
-    win_size.x -= win.border.line_rec.height * 2
-    win_size.y -= win.border.line_rec.height * 2
+    border = win.border
   }
+
+  win_size := rl.Vector2{ win.width, win.height }
+  if border != nil
+  {
+    line_rec := &border.line_rec
+
+    win_size.x -= (line_rec.left != nil)? line_rec.left.height : line_rec.height
+    win_size.x -= (line_rec.right!=nil) ?line_rec.right.height : line_rec.height
+
+    win_size.y -= (line_rec.top != nil) ? line_rec.top.height  : line_rec.height
+    win_size.y -= (line_rec.bot != nil) ? line_rec.bot.height  : line_rec.height
+  }
+
   switch &data in win.data
   {
   case TextElement:

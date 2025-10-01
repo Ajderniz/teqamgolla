@@ -11,13 +11,28 @@ ElementBackground :: struct {
   draw_mode : enum { STRETCH, TILE }
 }
 
-ElementBorder :: struct {
-    texture      : rl.Texture,
-    draw_mode    : enum { STRETCH, TILE },
-    corner_rec   : rl.Rectangle,
-    line_rec     : rl.Rectangle
+ElementBorderRectangles :: struct {
+  corner_rec : struct {
+    using default : rl.Rectangle,
+    tl            : ^rl.Rectangle,
+    tr            : ^rl.Rectangle,
+    bl            : ^rl.Rectangle,
+    br            : ^rl.Rectangle,
+  },
+  line_rec   : struct {
+    using default : rl.Rectangle,
+    top           : ^rl.Rectangle,
+    bot           : ^rl.Rectangle,
+    left          : ^rl.Rectangle,
+    right         : ^rl.Rectangle,
+  }
 }
 
+ElementBorder :: struct {
+  texture    : rl.Texture,
+  draw_mode  : enum { STRETCH, TILE },
+  using recs : ElementBorderRectangles
+}
 
 Element :: struct {
   data            : union { TextElement, ImageElement, BoxElement },
@@ -71,7 +86,8 @@ configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
   case TextElement:
     glyph_size := rl.Vector2 {
       font.recs[0].width,
-      f32(font.baseSize) + math.trunc(f32(font.glyphPadding / 2)) }
+      f32(font.baseSize) + math.trunc(f32(font.glyphPadding / 2))
+    }
     element.min_size.x =
       (element.min_size.x < glyph_size.x) ? glyph_size.x : element.min_size.x
     element.min_size.y =
@@ -141,13 +157,23 @@ configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
   {
     return
   }
+
+  border: ^ElementBorder
   #partial switch element.border_style
   {
   case .GLOBAL:
-    element.min_size += g_border.line_rec.height * 2
+    border = &g_border
   case .CUSTOM:
-    element.min_size += element.border.line_rec.height * 2
+    border = element.border
   }
+  line_rec := &border.line_rec
+
+  element.min_size.x+=(line_rec.left!=nil)? line_rec.left.height:line_rec.height
+  element.min_size.x += (line_rec.right != nil) ? line_rec.right.height :
+                                                  line_rec.height
+  element.min_size.y += (line_rec.top!=nil)? line_rec.top.height:line_rec.height
+  element.min_size.y += (line_rec.bot != nil) ? line_rec.bot.height :
+                                                   line_rec.height
 }
 
 @(private)
@@ -222,6 +248,29 @@ draw_element :: proc(
     border = element.border
   }
 
+  border_recs: ElementBorderRectangles
+  if border != nil
+  {
+    line_rec   := &border.line_rec
+    corner_rec := &border.corner_rec
+    border_recs = {
+      line_rec = {
+        default = line_rec.default,
+        top     = (line_rec.top   != nil) ? line_rec.top   : &line_rec.default,
+        bot     = (line_rec.bot   != nil) ? line_rec.bot   : &line_rec.default,
+        left    = (line_rec.left  != nil) ? line_rec.left  : &line_rec.default,
+        right   = (line_rec.right != nil) ? line_rec.right : &line_rec.default,
+      },
+      corner_rec = {
+        default = corner_rec.default,
+        tl      = (corner_rec.tl != nil) ? corner_rec.tl : &corner_rec.default,
+        tr      = (corner_rec.tr != nil) ? corner_rec.tr : &corner_rec.default,
+        bl      = (corner_rec.bl != nil) ? corner_rec.bl : &corner_rec.default,
+        br      = (corner_rec.br != nil) ? corner_rec.br : &corner_rec.default,
+      }
+    }
+  }
+
   draw_element:
   {
     rec := element.rec
@@ -230,10 +279,16 @@ draw_element :: proc(
     case TextElement, ImageElement:
       if border != nil
       {
-        rec.x      += border.line_rec.height
-        rec.y      += border.line_rec.height
-        rec.width  -= border.line_rec.height * 2
-        rec.height -= border.line_rec.height * 2
+        line_rec := &border_recs.line_rec
+
+        rec.x      += line_rec.left.height
+        rec.y      += line_rec.right.height
+
+        rec.width  -= line_rec.left.height
+        rec.width  -= line_rec.right.height
+
+        rec.height -= line_rec.top.height
+        rec.height -= line_rec.bot.height
       }
     }
 
@@ -272,79 +327,83 @@ draw_element :: proc(
       return
     }
 
+    corner_rec := &border_recs.corner_rec
+
     draw_lines:
     {
+      line_rec := &border_recs.line_rec
+
       if .STRETCH == border.draw_mode
       {
         rl.DrawTexturePro(
           border.texture,
-          border.line_rec,
-          { rec.x, rec.y, rec.width, border.line_rec.height },
+          line_rec.top^,
+          { rec.x, rec.y, rec.width, line_rec.top.height },
           { 0, 0 },
           0,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          border.line_rec,
-          { rec.x + rec.width, rec.y, rec.height, border.line_rec.height },
+          line_rec.right^,
+          { rec.x + rec.width, rec.y, rec.height, line_rec.right.height },
           { 0, 0 },
           90,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          border.line_rec,
-          { rec.x+rec.width, rec.y+rec.height,rec.width,border.line_rec.height},
+          line_rec.bot^,
+          { rec.x+rec.width, rec.y+rec.height, rec.width, line_rec.bot.height },
           { 0, 0 },
           180,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          border.line_rec,
-          { rec.x, rec.y + rec.height, rec.height, border.line_rec.height },
+          line_rec.left^,
+          { rec.x, rec.y + rec.height, rec.height, line_rec.left.height },
           { 0, 0 },
           270,
           fg_color)
       }
       else
       {
-        for x := rec.x + border.corner_rec.width;
-            x <  (rec.x + rec.width - border.corner_rec.width);
-            x += border.line_rec.width
+        for x := rec.x + corner_rec.tl.width;
+            x <  (rec.x + rec.width - corner_rec.tr.height);
+            x += line_rec.top.width
         {
-          rl.DrawTextureRec(border.texture, border.line_rec, {x,rec.y},fg_color)
+          rl.DrawTextureRec(border.texture, line_rec.top^, {x, rec.y}, fg_color)
         }
-        for y := rec.y + border.corner_rec.width;
-            y <  (rec.y + rec.height - border.corner_rec.width);
-            y += border.line_rec.width
+        for y := rec.y + corner_rec.tr.width;
+            y <  (rec.y + rec.height - corner_rec.br.height);
+            y += line_rec.right.width
         {
           rl.DrawTexturePro(
             border.texture,
-            border.line_rec,
-            { rec.x+rec.width, y, border.line_rec.width,border.line_rec.height},
+            line_rec.right^,
+            { rec.x+rec.width, y, line_rec.right.width, line_rec.right.height },
             { 0, 0 },
             90,
             fg_color)
         }
-        for x := rec.x + (border.corner_rec.width * 2);
+        for x := rec.x + (corner_rec.bl.width * 2);
             x <  (rec.x + rec.width);
-            x += border.line_rec.width
+            x += line_rec.bot.width
         {
           rl.DrawTexturePro(
             border.texture,
-            border.line_rec,
-            { x, rec.y+rec.height,border.line_rec.width,border.line_rec.height},
+            line_rec.bot^,
+            { x, rec.y + rec.height, line_rec.bot.width, line_rec.bot.height },
             { 0, 0 },
             180,
             fg_color)
         }
-        for y := rec.y + (border.corner_rec.width * 2);
+        for y := rec.y + (corner_rec.tl.width * 2);
             y <  (rec.y + rec.height);
-            y += border.line_rec.width
+            y += line_rec.left.width
         {
           rl.DrawTexturePro(
             border.texture,
-            border.line_rec,
-            { rec.x, y, border.line_rec.width, border.line_rec.height },
+            line_rec.left^,
+            { rec.x, y, line_rec.left.width, line_rec.left.height },
             { 0, 0 },
             270,
             fg_color)
@@ -355,26 +414,21 @@ draw_element :: proc(
     {
       draw_element_background(
         bg,
-        { rec.x, rec.y, border.corner_rec.width, border.corner_rec.height })
-      rl.DrawTextureRec(border.texture,border.corner_rec,{rec.x,rec.y},fg_color)
+        { rec.x, rec.y, corner_rec.tl.width, corner_rec.tl.height })
+      rl.DrawTextureRec(border.texture, corner_rec.tl^, {rec.x,rec.y}, fg_color)
 
       draw_element_background(
         bg,
         {
-          rec.x + rec.width - border.corner_rec.width,
+          rec.x + rec.width - corner_rec.tr.width,
           rec.y,
-          border.corner_rec.width,
-          border.corner_rec.height
+          corner_rec.tr.width,
+          corner_rec.tr.height
         })
       rl.DrawTexturePro(
         border.texture,
-        border.corner_rec,
-        {
-          rec.x + rec.width,
-          rec.y,
-          border.corner_rec.width,
-          border.corner_rec.height
-        },
+        corner_rec.tr^,
+        { rec.x + rec.width, rec.y, corner_rec.tr.width, corner_rec.tr.height },
         { 0, 0 },
         90,
         fg_color)
@@ -382,19 +436,19 @@ draw_element :: proc(
       draw_element_background(
         bg,
         {
-          rec.x + rec.width - border.corner_rec.width,
-          rec.y + rec.height - border.corner_rec.height,
-          border.corner_rec.width,
-          border.corner_rec.height
+          rec.x + rec.width - corner_rec.br.width,
+          rec.y + rec.height - corner_rec.br.height,
+          corner_rec.br.width,
+          corner_rec.br.height
         })
       rl.DrawTexturePro(
         border.texture,
-        border.corner_rec,
+        corner_rec.br^,
         {
           rec.x + rec.width,
           rec.y + rec.height,
-          border.corner_rec.width,
-          border.corner_rec.height
+          corner_rec.br.width,
+          corner_rec.br.height
         },
         { 0, 0 },
         180,
@@ -404,18 +458,18 @@ draw_element :: proc(
         bg,
         {
           rec.x,
-          rec.y + rec.height - border.corner_rec.height,
-          border.corner_rec.width,
-          border.corner_rec.height
+          rec.y + rec.height - corner_rec.bl.height,
+          corner_rec.bl.width,
+          corner_rec.bl.height
         })
       rl.DrawTexturePro(
         border.texture,
-        border.corner_rec,
+        corner_rec.bl^,
         {
           rec.x,
           rec.y + rec.height,
-          border.corner_rec.width,
-          border.corner_rec.height
+          corner_rec.bl.width,
+          corner_rec.bl.height
         },
         { 0, 0 },
         270,

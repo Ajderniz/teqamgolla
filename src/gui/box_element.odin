@@ -197,19 +197,25 @@ update_box_element_content_sizes :: proc(
   update_contents:
   for e in box.content
   {
-    e_size := rl.Vector2{ e.width, e.height }
+    border: ^ElementBorder
     #partial switch e.border_style
     {
     case .GLOBAL:
-      e_size.x -= g_border.line_rec.height * 2
-      e_size.y -= g_border.line_rec.height * 2
+      border = &g_border
     case .CUSTOM:
-      if nil == e.border
-      {
-        break
-      }
-      e_size.x -= e.border.line_rec.height * 2
-      e_size.y -= e.border.line_rec.height * 2
+      border = e.border
+    }
+
+    e_size := rl.Vector2{ e.width, e.height }
+    if border != nil
+    {
+      line_rec := &border.line_rec
+
+      e_size.x -= (line_rec.left != nil)? line_rec.left.height : line_rec.height
+      e_size.x -= (line_rec.right!= nil)? line_rec.right.height: line_rec.height
+
+      e_size.y -= (line_rec.top  != nil)? line_rec.top.height  : line_rec.height
+      e_size.y -= (line_rec.bot  != nil)? line_rec.bot.height  : line_rec.height
     }
 
     #partial switch &d in e.data

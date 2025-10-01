@@ -72,17 +72,15 @@ main :: proc()
   border := rl.LoadTexture("../res/img/border.png")
   eborder := gui.ElementBorder {
     texture=border,
-    corner_rec={0,0,5,5},
-    line_rec={5,0,5,5}
+    corner_rec={
+      default={0,0,5,5},
+    },
+    line_rec={
+      default={5,0,5,5},
+    },
   }
   background := rl.LoadTexture("../res/img/background.png")
-  ebg := gui.ElementBackground{
-    color=rl.BLUE,
-    texture=&background,
-    draw_mode=.TILE
-  }
-  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder,
-    bg=ebg)
+  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder)
 
   cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
@@ -93,7 +91,7 @@ main :: proc()
 
   txt1 := gui.Element{
     data=gui.TextElement{
-      txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into math-warehouse papier-mache boy shoes."
+      txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into  math-warehouse papier-mache boy shoes."
     },
   }
   defer gui.delete_text_element(&txt1.data.(gui.TextElement))
