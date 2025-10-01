@@ -23,7 +23,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   font     := (win.font     != nil) ? win.font^     : g_font
   pad      := (win.pad      != nil) ? win.pad^      : g_pad
   fg_color := (win.fg_color != nil) ? win.fg_color^ : g_fg_color
-  bg_color := (win.bg_color != nil) ? win.bg_color^ : g_bg_color
+  bg       := (win.bg       != nil) ? win.bg^       : g_bg
 
   if win.min_size.x <= 0 || win.min_size.y <= 0
   {
@@ -77,26 +77,18 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     {
       update_text_element_buffer(&data, win_size, font)
     }
-    rl.DrawRectangleRec(win.rec, bg_color)
+    draw_element_background(bg, win.rec)
 
   case ImageElement:
-    rl.DrawRectangleRec(win.rec, bg_color)
+    draw_element_background(bg, win.rec)
 
   case BoxElement:
-    border: ^ElementBorder
-    #partial switch win.border_style
-    {
-    case .GLOBAL:
-      border = &g_border
-    case .CUSTOM:
-      border = win.border
-    }
     if update_sizes
     {
       update_box_element_content_sizes(&data, win_size, font, pad)
     }
   }
-  draw_element(win.element, font, pad, fg_color, bg_color, highlight)
+  draw_element(win.element, font, pad, fg_color, bg, highlight)
 }
 
 @(private)

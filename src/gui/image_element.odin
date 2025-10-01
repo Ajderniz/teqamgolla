@@ -7,6 +7,7 @@ ImageElement :: struct {
   resize  : enum { NONE, CENTER, STRETCH },
 }
 
+@(private)
 draw_image_element :: proc(imge: ImageElement, rec: rl.Rectangle)
 {
   switch imge.resize

@@ -5,8 +5,22 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
+ElementBackground :: struct {
+  color     : rl.Color,
+  texture   : ^rl.Texture,
+  draw_mode : enum { STRETCH, TILE }
+}
+
+ElementBorder :: struct {
+    texture      : rl.Texture,
+    draw_mode    : enum { STRETCH, TILE },
+    corner_rec   : rl.Rectangle,
+    line_rec     : rl.Rectangle
+}
+
+
 Element :: struct {
-  data          : union { TextElement, ImageElement, BoxElement },
+  data            : union { TextElement, ImageElement, BoxElement },
 
   using rec     : rl.Rectangle,
   min_size      : rl.Vector2,
@@ -16,7 +30,7 @@ Element :: struct {
   font          : ^rl.Font,
   pad           : ^f32,
   fg_color      : ^rl.Color,
-  bg_color      : ^rl.Color,
+  bg            : ^ElementBackground,
 
   border_style  : enum { NONE, LINE, GLOBAL, CUSTOM },
   border        : ^ElementBorder
@@ -137,12 +151,57 @@ configure_element_min_size :: proc(element: ^Element, p_font:rl.Font, p_pad:f32)
 }
 
 @(private)
+draw_element_background :: proc(
+  bg       : ElementBackground,
+  rec      : rl.Rectangle
+  ) {
+  if nil == bg.texture
+  {
+    rl.DrawRectangleRec(rec, bg.color)
+    return
+  }
+
+  if .STRETCH == bg.draw_mode
+  {
+    rl.DrawTexturePro(
+      bg.texture^,
+      { 0, 0, f32(bg.texture.width), f32(bg.texture.height) },
+      rec,
+      { 0, 0 },
+      0,
+      bg.color)
+  }
+  else
+  {
+    step  := rl.Vector2 { f32(bg.texture.width), f32(bg.texture.height) }
+    limit := rl.Vector2 { rec.x + rec.width, rec.y + rec.height }
+    for y := rec.y; y < limit.y; y += step.y
+    {
+      for x := rec.x; x < limit.x; x += step.x
+      {
+        diff := rl.Vector2 { limit.x - x, limit.y - y }
+        rl.DrawTextureRec(
+          bg.texture^,
+          {
+            0,
+            0,
+            (diff.x <= step.x) ? diff.x : step.x,
+            (diff.y <= step.y) ? diff.y : step.y,
+          },
+          { x, y },
+          bg.color)
+      }
+    }
+  }
+}
+
+@(private)
 draw_element :: proc(
   element    :  ^Element,
   p_font     :  rl.Font,
   p_pad      :  f32,
   p_fg_color :  rl.Color,
-  p_bg_color :  rl.Color,
+  p_bg       :  ElementBackground,
   highlight  := false)
 {
   if nil == element
@@ -152,7 +211,7 @@ draw_element :: proc(
   font     := (element.font     != nil) ? element.font^     : p_font
   pad      := (element.pad      != nil) ? element.pad^      : p_pad
   fg_color := (element.fg_color != nil) ? element.fg_color^ : p_fg_color
-  bg_color := (element.bg_color != nil) ? element.bg_color^ : p_bg_color
+  bg       := (element.bg       != nil) ? element.bg^       : p_bg
 
   border: ^ElementBorder
   #partial switch element.border_style
@@ -185,7 +244,7 @@ draw_element :: proc(
     case ImageElement:
       draw_image_element(data, rec)
     case BoxElement:
-      draw_box_element(data, rec, font, pad, fg_color,bg_color,border,highlight)
+      draw_box_element(data, rec, font, pad, fg_color, bg, border, highlight)
     }
   }
 
@@ -294,19 +353,19 @@ draw_element :: proc(
     }
     draw_corners:
     {
-      rl.DrawRectangleRec(
-        { rec.x, rec.y, border.corner_rec.width, border.corner_rec.height },
-        bg_color)
-      rl.DrawTextureRec(border.texture, border.corner_rec, {rec.x,rec.y},fg_color)
+      draw_element_background(
+        bg,
+        { rec.x, rec.y, border.corner_rec.width, border.corner_rec.height })
+      rl.DrawTextureRec(border.texture,border.corner_rec,{rec.x,rec.y},fg_color)
 
-      rl.DrawRectangleRec(
+      draw_element_background(
+        bg,
         {
           rec.x + rec.width - border.corner_rec.width,
           rec.y,
           border.corner_rec.width,
           border.corner_rec.height
-        },
-        bg_color)
+        })
       rl.DrawTexturePro(
         border.texture,
         border.corner_rec,
@@ -320,14 +379,14 @@ draw_element :: proc(
         90,
         fg_color)
 
-      rl.DrawRectangleRec(
+      draw_element_background(
+        bg,
         {
           rec.x + rec.width - border.corner_rec.width,
           rec.y + rec.height - border.corner_rec.height,
           border.corner_rec.width,
           border.corner_rec.height
-        },
-        bg_color)
+        })
       rl.DrawTexturePro(
         border.texture,
         border.corner_rec,
@@ -341,14 +400,14 @@ draw_element :: proc(
         180,
         fg_color)
 
-      rl.DrawRectangleRec(
+      draw_element_background(
+        bg,
         {
           rec.x,
           rec.y + rec.height - border.corner_rec.height,
           border.corner_rec.width,
           border.corner_rec.height
-        },
-        bg_color)
+        })
       rl.DrawTexturePro(
         border.texture,
         border.corner_rec,
@@ -364,31 +423,3 @@ draw_element :: proc(
     }
   }
 }
-
-/*
-IS THIS EVEN NECESSARY?
-
-@(private)
-configure_element_max_size :: proc(
-  element: ^Element,
-  max_size: rl.Vector2,
-  p_pad: f32)
-{
-  if 0 <= element.max_size.x || max_size.x < element.max_size.x
-  {
-    element.max_size.x = max_size.x
-  }
-  if 0 <= element.max_size.y || max_size.y < element.max_size.y
-  {
-    element.max_size.y = max_size.y
-  }
-  #partial switch data in element.data
-  {
-  case BoxElement:
-    for e in data.content
-    {
-      configure_element_max_size(e, e.max_size, (data.pad!=nil)?data.pad^:p_pad)
-    }
-  }
-}
-*/

@@ -13,10 +13,10 @@ import     "core:mem"
 import     "core:math"
 import str "core:strings"
 
-import rl "vendor:raylib"
+import rl  "vendor:raylib"
 
-import g "global"
-import   "gui"
+import g   "global"
+import     "gui"
 
 main :: proc()
 {
@@ -75,7 +75,14 @@ main :: proc()
     corner_rec={0,0,5,5},
     line_rec={5,0,5,5}
   }
-  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder)
+  background := rl.LoadTexture("../res/img/background.png")
+  ebg := gui.ElementBackground{
+    color=rl.BLUE,
+    texture=&background,
+    draw_mode=.TILE
+  }
+  gui.init(font, base_unit=4, frame_delay=3, scroll_delay=4, border=eborder,
+    bg=ebg)
 
   cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 

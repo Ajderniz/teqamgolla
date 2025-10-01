@@ -233,7 +233,7 @@ draw_box_element :: proc(
   p_font     :  rl.Font,
   p_pad      :  f32,
   p_fg_color :  rl.Color,
-  p_bg_color :  rl.Color,
+  p_bg       :  ElementBackground,
   border     : ^ElementBorder,
   highlight  := false,
   ) {
@@ -249,8 +249,8 @@ draw_box_element :: proc(
     header_rec := rec
     header_rec.height = header_offset
 
-    header_bg_color := (highlight) ? p_fg_color : p_bg_color
-    header_fg_color := (highlight) ? p_bg_color : p_fg_color
+    header_bg_color := (highlight) ? p_fg_color : p_bg.color
+    header_fg_color := (highlight) ? p_bg.color : p_fg_color
 
     rl.DrawRectangleRec(header_rec, header_bg_color)
     rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_fg_color)
@@ -272,7 +272,7 @@ draw_box_element :: proc(
   content_rec.y      += header_offset
   content_rec.height -= header_offset
 
-  rl.DrawRectangleRec(content_rec, p_bg_color)
+  draw_element_background(p_bg, content_rec)
 
   if border != nil
   {
@@ -330,34 +330,6 @@ draw_box_element :: proc(
     }
     content_offset += (.VERTICAL == box.layout) ? e.height : e.width
 
-    /*
-    font     := (e.font     != nil) ? e.font^     : p_font
-    pad      := (e.pad      != nil) ? e.pad^      : p_pad
-    fg_color := (e.fg_color != nil) ? e.fg_color^ : p_fg_color
-    bg_color := (e.bg_color != nil) ? e.bg_color^ : p_bg_color
-    */
-
-    draw_element(e, p_font, p_pad, p_fg_color, p_bg_color)
-    /*
-    switch d in e.data
-    {
-    case TextElement:
-      draw_text_element(d, e.rec, font, fg_color)
-
-    case ImageElement:
-      draw_image_element(d, e.rec)
-
-    case BoxElement:
-      border: ^ElementBorder
-      #partial switch e.border_style
-      {
-      case .GLOBAL:
-        border = &g_border
-      case .CUSTOM:
-        border = e.border
-      }
-      draw_box_element(d, e.rec, font, pad, fg_color, bg_color, border)
-    }
-    */
+    draw_element(e, p_font, p_pad, p_fg_color, p_bg)
   }
 }
