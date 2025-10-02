@@ -43,6 +43,8 @@ CursorState :: enum {
 @(private) g_fg_color      : rl.Color
 @(private) g_bg            : ItemBackground
 
+@(private) g_win_shadow    : f32
+
 @(private) g_line_thick    : f32
 @(private) g_border        : ItemBorder
 
@@ -394,6 +396,7 @@ init :: proc(
   pad          : f32            = 12,
   fg_color     :                = rl.BLACK,
   bg           : ItemBackground = { color=rl.WHITE },
+  win_shadow   : f32            = 2,
   border       : ItemBorder     = {},
   line_thick   : f32            = 1,
   base_unit    : rl.Vector2     = { 1, 1 },
@@ -404,6 +407,7 @@ init :: proc(
   g_pad          = pad
   g_fg_color     = fg_color
   g_bg           = bg
+  g_win_shadow   = win_shadow
   g_border       = border
   g_line_thick   = line_thick
   g_base_unit    = base_unit

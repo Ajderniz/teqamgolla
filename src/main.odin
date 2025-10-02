@@ -111,17 +111,12 @@ main :: proc()
     non_resizable={true,true},
   }
 
-  red:=rl.RED
-  white:=rl.WHITE
-
   button := gui.Item{
     data=gui.ButtonItem{
       label="BUTTON"
     },
     non_resizable={false,true},
     border_style=.GLOBAL,
-    bg=&{color=red},
-    fg_color=&white
   }
 
   box1 := gui.Item{

@@ -97,6 +97,16 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
     }
   }
   draw_item(win.item, font, pad, fg_color, bg, highlight)
+
+  if .DRAG == win.act_state || .RESIZE == win.act_state
+  {
+    rl.DrawRectangleRec(
+      { win.x + g_win_shadow, win.y + win.height, win.width, g_win_shadow },
+      rl.BLACK)
+    rl.DrawRectangleRec(
+      { win.x + win.width, win.y + g_win_shadow, g_win_shadow, win.height },
+      rl.BLACK)
+  }
 }
 
 @(private)
