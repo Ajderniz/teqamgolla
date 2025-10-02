@@ -34,7 +34,7 @@ update_box_item_content_sizes :: proc(
       size := (.VERTICAL == boxi.layout) ? bi.min_size.y : bi.min_size.x
       switch d in bi.data
       {
-      case TextItem, ImageItem:
+      case TextItem, ImageItem, ButtonItem:
         size += p_pad
       case BoxItem:
         size -= p_pad
@@ -94,7 +94,7 @@ update_box_item_content_sizes :: proc(
       continue
     }
 
-    is_constrained: bool
+    is_constrained := false
 
     share := math.trunc(available_space / f32(remaining_items))
 
@@ -124,7 +124,7 @@ update_box_item_content_sizes :: proc(
 
       #partial switch d in e.data
       {
-      case TextItem, ImageItem:
+      case TextItem, ImageItem, ButtonItem:
         e.width  -= (.VERTICAL == boxi.layout) ? double_pad : 0
       }
     }
@@ -156,7 +156,7 @@ update_box_item_content_sizes :: proc(
 
       #partial switch d in e.data
       {
-      case TextItem, ImageItem:
+      case TextItem, ImageItem, ButtonItem:
         e.height -= (.VERTICAL == boxi.layout) ? 0 : double_pad
       }
     }
@@ -185,11 +185,11 @@ update_box_item_content_sizes :: proc(
       }
       if .VERTICAL == boxi.layout
       {
-        e.height += (!e.non_resizable.y) ? share : e.height
+        e.height += (!e.non_resizable.y) ? share : 0
       }
       else
       {
-        e.width  += (!e.non_resizable.x) ? share : e.width
+        e.width  += (!e.non_resizable.x) ? share : 0
       }
     }
   }
@@ -297,7 +297,7 @@ draw_box_item :: proc(
 
     switch d in e.data
     {
-    case TextItem, ImageItem:
+    case TextItem, ImageItem, ButtonItem:
       must_add_pad := false
       if 0 == i
       {
@@ -307,7 +307,7 @@ draw_box_item :: proc(
       {
         #partial switch pd in boxi.content[i-1].data
         {
-        case TextItem, ImageItem:
+        case TextItem, ImageItem, ButtonItem:
           must_add_pad = true
         }
       }

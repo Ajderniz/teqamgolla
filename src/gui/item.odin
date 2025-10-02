@@ -35,7 +35,7 @@ ItemBorder :: struct {
 }
 
 Item :: struct {
-  data            : union { TextItem, ImageItem, BoxItem },
+  data            : union { TextItem, ImageItem, ButtonItem , BoxItem, },
 
   using rec     : rl.Rectangle,
   min_size      : rl.Vector2,
@@ -62,8 +62,9 @@ get_item_under_mouse :: proc(
   }
   switch d in item.data
   {
-  case TextItem, ImageItem:
+  case TextItem, ImageItem, ButtonItem:
     return item
+
   case BoxItem:
     for e in d.content
     {
@@ -97,6 +98,9 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
     item.min_size.x = (item.min_size.x < og_size.x)? og_size.x : item.min_size.x
     item.min_size.y = (item.min_size.y < og_size.y)? og_size.y : item.min_size.y
 
+  case ButtonItem:
+    item.min_size = get_button_item_label_size(data, font)
+
   case BoxItem:
 
     pad := (item.pad != nil) ? item.pad^ : p_pad
@@ -119,7 +123,7 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
       this_min_size := e.min_size
       switch d in e.data
       {
-      case TextItem, ImageItem:
+      case TextItem, ImageItem, ButtonItem:
         this_min_size.x += (.VERTICAL == data.layout) ? double_pad : pad
         this_min_size.y += (.VERTICAL == data.layout) ? pad : double_pad
 
@@ -225,7 +229,7 @@ draw_item :: proc(
   p_pad      :  f32,
   p_fg_color :  rl.Color,
   p_bg       :  ItemBackground,
-  highlight  := false)
+  box_highlight  := false)
 {
   if nil == item
   {
@@ -289,14 +293,21 @@ draw_item :: proc(
       }
     }
 
-    switch data in item.data
+    switch &data in item.data
     {
     case TextItem:
       draw_text_item(data, rec, font, fg_color)
     case ImageItem:
       draw_image_item(data, rec)
+    case ButtonItem:
+      tmp_fg_color := fg_color
+      tmp_bg_color := bg.color
+      fg_color = (data.highlight) ? tmp_bg_color : tmp_fg_color
+      bg.color = (data.highlight) ? tmp_fg_color : tmp_bg_color
+      draw_button_item(data, rec, font, fg_color, bg)
+      data.highlight = false
     case BoxItem:
-      draw_box_item(data, rec, font, pad, fg_color, bg, border, highlight)
+      draw_box_item(data, rec, font, pad, fg_color, bg, border, box_highlight)
     }
   }
 
@@ -318,7 +329,7 @@ draw_item :: proc(
       }
     }
 
-    if nil == border
+    if nil == border || !rl.IsTextureValid(border.texture)
     {
       rl.DrawRectangleLinesEx(rec, g_line_thick, fg_color)
       return
@@ -407,6 +418,7 @@ draw_item :: proc(
         }
       }
     }
+
     draw_corners:
     {
       draw_item_background(
