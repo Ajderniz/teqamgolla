@@ -16,8 +16,16 @@ import str "core:strings"
 import rl  "vendor:raylib"
 
 import dgn "dungeon"
-import g   "global"
 import     "gui"
+
+NAT_SCR_W :: 640
+NAT_SCR_H :: (NAT_SCR_W / 4) * 3
+
+SCALE :: 2
+SCR_W :: NAT_SCR_W * SCALE
+SCR_H :: NAT_SCR_H * SCALE
+
+FPS   :: 20
 
 main :: proc()
 {
@@ -50,17 +58,15 @@ main :: proc()
 
   /* ========================== INITIALIZATION ============================== */
 
-  rl.InitWindow(g.SCR_W, g.SCR_H, "Teqamgolla")
-  rl.SetTargetFPS(g.FPS)
+  rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
+  rl.SetTargetFPS(FPS)
 
-  rtxr := rl.LoadRenderTexture(g.NAT_SCR_W, g.NAT_SCR_H)
+  rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
   first_person_rtxr := rl.LoadRenderTexture(
-    i32(math.trunc(f32(g.NAT_SCR_H) * .75)),
-    i32(math.trunc(f32(g.NAT_SCR_H) * .75))
+    i32(math.trunc(f32(NAT_SCR_H) * .75)),
+    i32(math.trunc(f32(NAT_SCR_H) * .75))
     )
   minimap_rtxr := rl.LoadRenderTexture(100, 100)
-
-  //cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
   dum: dgn.Block
   bmap: dgn.BlockMap = {
@@ -91,22 +97,8 @@ main :: proc()
 
   /* ============================= MAIN LOOP ================================ */
 
-  //rl.HideCursor()
-
   for !rl.WindowShouldClose()
   {
-    /*
-    // TODO: Maybe this should go into the GUI package
-
-    mpos := rl.GetMousePosition()
-    mpos.x = math.trunc(mpos.x / g.SCALE)
-    mpos.y = math.trunc(mpos.y / g.SCALE)
-    mpos.x = (mpos.x < 0) ? 0 : mpos.x
-    mpos.y = (mpos.y < 0) ? 0 : mpos.y
-    mpos.x = (g.NAT_SCR_W < mpos.x) ? g.NAT_SCR_W : mpos.x
-    mpos.y = (g.NAT_SCR_H < mpos.y) ? g.NAT_SCR_H : mpos.y
-    */
-
     key_pressed := rl.GetKeyPressed()
     old_player := player
     old_stretch := stretch
@@ -193,8 +185,8 @@ main :: proc()
           -f32(first_person_rtxr.texture.height),
         },
         {
-          (g.NAT_SCR_W - f32(first_person_rtxr.texture.width))  / 2,
-          (g.NAT_SCR_H - f32(first_person_rtxr.texture.height)) / 2,
+          (NAT_SCR_W - f32(first_person_rtxr.texture.width))  / 2,
+          (NAT_SCR_H - f32(first_person_rtxr.texture.height)) / 2,
           f32(first_person_rtxr.texture.width),
           f32(first_person_rtxr.texture.height),
         },
@@ -221,47 +213,6 @@ main :: proc()
         0,
         rl.WHITE
         )
-
-
-      /*
-      // TODO: move this cursor thing into its own package
-      cursor_txr_offset: f32 = 0
-      cursor_pos := rl.GetMousePosition()
-      cursor_pos.x = math.trunc(cursor_pos.x / g.SCALE)
-      cursor_pos.y = math.trunc(cursor_pos.y / g.SCALE)
-      // Should not depend on GUI
-      #partial switch gui.get_cursor_state()
-      {
-      case .POTENTIAL:
-        cursor_txr_offset = 16
-        cursor_pos -= 8
-      case .DRAG:
-        cursor_txr_offset = 32
-        cursor_pos -= 8
-      case .RESIZE:
-        cursor_txr_offset = 48
-        cursor_pos -= 16
-      case .SCROLL_UP:
-        cursor_txr_offset = 64
-        cursor_pos.x -= 8
-        cursor_pos.y -= 12
-      case .SCROLL_DOWN:
-        cursor_txr_offset = 80
-        cursor_pos.x -= 8
-        cursor_pos.y -= 4
-      case .PAGE_PREV:
-        cursor_txr_offset = 96
-        cursor_pos -= 8
-      case .PAGE_NEXT:
-        cursor_txr_offset = 112
-        cursor_pos -= 8
-      }
-      rl.DrawTextureRec(
-        cursor_txr,
-        { cursor_txr_offset, 0, 16, 16 },
-        cursor_pos,
-        rl.WHITE)
-      */
     }
     rl.EndTextureMode()
 
@@ -270,15 +221,14 @@ main :: proc()
       rl.ClearBackground(rl.BLACK)
       rl.DrawTexturePro(
         rtxr.texture,
-        { 0, 0, g.NAT_SCR_W, -g.NAT_SCR_H },
-        { 0, 0, g.SCR_W, g.SCR_H },
+        { 0, 0, NAT_SCR_W, -NAT_SCR_H },
+        { 0, 0, SCR_W, SCR_H },
         0,
         0,
         rl.WHITE)
     }
     rl.EndDrawing()
   }
-    //rl.UnloadTexture(cursor_txr)
     rl.UnloadRenderTexture(rtxr)
     rl.UnloadRenderTexture(first_person_rtxr)
     rl.UnloadRenderTexture(minimap_rtxr)

@@ -12,7 +12,7 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-import     "../global"
+import     "../cursor"
 
 ActionState :: enum {
   NONE,
@@ -23,21 +23,8 @@ ActionState :: enum {
   BUTTON_DOWN,
 }
 
-CursorState :: enum {
-  DEFAULT,
-  POTENTIAL,
-  DRAG,
-  RESIZE,
-  SCROLL_UP,
-  SCROLL_DOWN,
-  PAGE_PREV,
-  PAGE_NEXT
-}
-
 @(private) g_frame_delay   : int
 @(private) g_scroll_delay  : int
-
-@(private) g_cursor_state  : CursorState
 
 @(private) g_font          : rl.Font
 @(private) g_pad           : f32
@@ -79,7 +66,11 @@ get_text_size :: proc(txt: string, font: rl.Font) -> rl.Vector2
   return rl.MeasureTextEx(font, txt_cstring, f32(font.baseSize), 0)
 }
 
-process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
+process_window_list_input :: proc(
+  list       : []^Window,
+  scr_width  : f32,
+  scr_height : f32,
+  scr_scale  : f32)
 {
   @(static) frame_counter: int
   @(static) scroll_counter: int
@@ -99,10 +90,20 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
     }
   }
 
+  mouse_pos := rl.GetMousePosition()
+  mouse_pos.x = math.trunc(mouse_pos.x / scr_scale)
+  mouse_pos.y = math.trunc(mouse_pos.y / scr_scale)
+  mouse_pos.x = (mouse_pos.x < 0) ? 0 : mouse_pos.x
+  mouse_pos.y = (mouse_pos.y < 0) ? 0 : mouse_pos.y
+  mouse_pos.x = (scr_width  < mouse_pos.x) ? scr_width  : mouse_pos.x
+  mouse_pos.y = (scr_height < mouse_pos.y) ? scr_height : mouse_pos.y
+
   new_top_index := -1
-  windows: for win, i in list
+  windows:
+  for win, i in list
   {
-    vf_check: #partial switch win.act_state
+    vf_check:
+    #partial switch win.act_state
     {
       case .DRAG, .RESIZE, .SCROLL_DOWN, .SCROLL_UP:
         if frame_counter != 0
@@ -111,16 +112,20 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         }
     }
 
-    action: switch win.act_state
+    action:
+    switch win.act_state
     {
     case .NONE:
       if 0 == i
       {
-        g_cursor_state = .DEFAULT
+        cursor.set_state(.DEFAULT)
       }
       else
       {
+        /* 
+        TODO: check if this makes any sense
         g_cursor_state = (g_cursor_state != .DEFAULT)? g_cursor_state : .DEFAULT
+        */
       }
       
       if !is_v2_within_rec(mouse_pos, win.rec)
@@ -135,7 +140,7 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         }
       }
       
-      g_cursor_state = .POTENTIAL
+      cursor.set_state(.POTENTIAL)
 
       wheel_move := rl.GetMouseWheelMove()
 
@@ -166,12 +171,12 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
             if mouse_pos.y <= item.y + math.trunc(item.height / 2)
             {
               txt_item_dir = .PREV
-              g_cursor_state = .SCROLL_UP
+              cursor.set_state(.SCROLL_UP)
             }
             else
             {
               txt_item_dir = .NEXT
-              g_cursor_state = .SCROLL_DOWN
+              cursor.set_state(.SCROLL_DOWN)
             }
           }
           else // PAGED
@@ -179,18 +184,18 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
             if mouse_pos.x <= item.x + math.trunc(item.width / 2)
             {
               txt_item_dir = .PREV
-              g_cursor_state = .PAGE_PREV
+              cursor.set_state(.PAGE_PREV)
             }
             else
             {
               txt_item_dir = .NEXT
-              g_cursor_state = .PAGE_NEXT
+              cursor.set_state(.PAGE_NEXT)
             }
           }
 
         case ButtonItem:
           d.highlight = true
-          g_cursor_state = .DEFAULT
+          cursor.set_state(.DEFAULT)
         }
       }
 
@@ -237,7 +242,7 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         {
           mouse_offset = { (mouse_pos.x - win.x), (mouse_pos.y - win.y) }
           win.act_state = .DRAG
-          g_cursor_state = .DRAG
+          cursor.set_state(.DRAG)
 
           win.maximized = false
         } 
@@ -247,11 +252,10 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
         if !(win.non_resizable.x && win.non_resizable.y)
         {
           rl.SetMousePosition(
-            i32(win.x + win.width) * i32(global.SCALE),
-            i32(win.y + win.height) * i32(global.SCALE)
+            i32(win.x + win.width) * i32(scr_scale),
+            i32(win.y + win.height) * i32(scr_scale)
             )
-          win.act_state = .RESIZE
-          g_cursor_state = .RESIZE
+          cursor.set_state(.RESIZE)
 
           win.maximized = false
         }
@@ -259,8 +263,8 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
 
       case .MIDDLE:
         if (win.non_resizable.x && win.non_resizable.y) ||
-           (0 < win.max_size.x && win.max_size.x < global.NAT_SCR_W) ||
-           (0 < win.max_size.y && win.max_size.y < global.NAT_SCR_H)
+           (0 < win.max_size.x && win.max_size.x < scr_width) ||
+           (0 < win.max_size.y && win.max_size.y < scr_height)
         {
           break action
         }
@@ -271,12 +275,12 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
           if !win.non_resizable.x
           {
             win.x = 0
-            win.width = global.NAT_SCR_W
+            win.width = scr_width
           }
           if !win.non_resizable.y
           {
             win.y = 0
-            win.height = global.NAT_SCR_H
+            win.height = scr_height
           }
 
           win.maximized = true
@@ -361,12 +365,12 @@ process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)
       if mouse_pos.y <= item.y + math.trunc(item.height / 2)
       {
         scroll_text_item(txt_item, .PREV)
-        g_cursor_state = .SCROLL_UP
+        cursor.set_state(.SCROLL_UP)
       }
       else
       {
         scroll_text_item(txt_item, .NEXT)
-        g_cursor_state = .SCROLL_DOWN
+        cursor.set_state(.SCROLL_DOWN)
       }
 
     case .BUTTON_DOWN:
@@ -402,31 +406,33 @@ draw_window_list :: proc(list: []^Window)
 
 init :: proc(
   font         : rl.Font,
+
   pad          : f32            = 12,
   fg_color     :                = rl.BLACK,
   bg           : ItemBackground = { color=rl.WHITE },
+
   win_shadow   : f32            = 2,
   border       : ItemBorder     = {},
   line_thick   : f32            = 1,
   base_unit    : rl.Vector2     = { 1, 1 },
+
   frame_delay  :                = 1,
   scroll_delay :                = 1,
 ) {
   g_font         = font
+
   g_pad          = pad
   g_fg_color     = fg_color
   g_bg           = bg
+
   g_win_shadow   = win_shadow
   g_border       = border
   g_line_thick   = line_thick
   g_base_unit    = base_unit
+
   g_frame_delay  = (frame_delay < 0) ? 1 : frame_delay
   g_scroll_delay = (scroll_delay < 0) ? 1 : scroll_delay
 
-  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
-}
 
-get_cursor_state :: #force_inline proc() -> CursorState
-{
-  return g_cursor_state
+  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
 }

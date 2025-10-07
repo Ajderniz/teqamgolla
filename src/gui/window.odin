@@ -5,8 +5,6 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
-import    "../global"
-
 Window :: struct {
   draggable  : bool,
   act_state  : ActionState,
