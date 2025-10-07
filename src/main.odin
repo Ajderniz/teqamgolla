@@ -15,6 +15,7 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
+import dgn "dungeon"
 import g   "global"
 import     "gui"
 
@@ -50,122 +51,53 @@ main :: proc()
   /* ========================== INITIALIZATION ============================== */
 
   rl.InitWindow(g.SCR_W, g.SCR_H, "Teqamgolla")
-
-  rtxr := rl.LoadRenderTexture(g.NAT_SCR_W, g.NAT_SCR_H)
-
-  font: rl.Font
-  {
-    codepoint_count: i32
-    codepoints := rl.LoadCodepoints(
-      "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20!\"#$%&'()*+,-./0123456789:;<>=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}~\x7F\xA0¡¿ÁÉÍÑÓÚÜáéíñóúü\x00",
-      &codepoint_count)
-
-    font = rl.LoadFontEx(
-      "../res/fonts/Px437_DOS-V_re_ANK16.ttf",
-      16,
-      codepoints,
-      codepoint_count)
-
-    rl.UnloadCodepoints(codepoints)
-  }
-
-  border := rl.LoadTexture("../res/img/border.png")
-  iborder := gui.ItemBorder {
-    texture=border,
-    corner_rec={
-      default={0,0,5,5},
-    },
-    line_rec={
-      default={5,0,5,5},
-    },
-  }
-  gui.init(font, base_unit=4, frame_delay=2, scroll_delay=4, border=iborder)
-
-  cursor_txr := rl.LoadTexture("../res/img/cursor.png")
-
-  bliss := rl.LoadTexture("../res/img/bliss.jpg")
-  danta := rl.LoadTexture("../res/img/danta.png")
-
   rl.SetTargetFPS(g.FPS)
 
-  txt1 := gui.Item{
-    data=gui.TextItem{
-      txt="Chiba man paranoid math-spook shanty town render-farm sensory futurity office tube. Military-grade faded refrigerator ablative range-rover rain numinous shoes. Pen cyber-spook market bridge bomb sunglasses courier post-into  math-warehouse papier-mache boy shoes."
-    },
-  }
-  defer gui.delete_text_item(&txt1.data.(gui.TextItem))
+  rtxr := rl.LoadRenderTexture(g.NAT_SCR_W, g.NAT_SCR_H)
+  first_person_rtxr := rl.LoadRenderTexture(
+    i32(math.trunc(f32(g.NAT_SCR_H) * .75)),
+    i32(math.trunc(f32(g.NAT_SCR_H) * .75))
+    )
+  minimap_rtxr := rl.LoadRenderTexture(100, 100)
 
-  txt2 := gui.Item{
-    data=gui.TextItem{
-      txt="Singularity decay tank-traps jeans numinous sprawl realism beef noodles narrative motion pistol cardboard crypto-tower. Vinyl RAF smart-euro-pop spook footage weathered wristwatch wonton soup. Boat crypto-hotdog faded j-pop soul-delay cardboard. Nodality marketing vinyl narrative paranoid beef noodles sign human systema monofilament boat decay. Film tanto papier-mache office sign table weathered. Range-rover computer soul-delay long-chain hydrocarbons pre-DIY systema systemic-ware footage sentient office weathered monofilament. Drugs neon modem rebar garage table savant franchise nano-narrative hotdog geodesic pen hacker realism. DIY cardboard Shibuya film drone monofilament ablative.",
-      scroll_type=.PAGED
-    },
-  }
-  defer gui.delete_text_item(&txt2.data.(gui.TextItem))
+  //cursor_txr := rl.LoadTexture("../res/img/cursor.png")
 
-  img := gui.Item{
-    data=gui.ImageItem{
-      texture=danta,
-      resize=.STRETCH
+  dum: dgn.Block
+  bmap: dgn.BlockMap = {
+    {
+      { &dum, &dum, &dum, &dum },
+      { &dum, &dum, &dum, &dum },
+      { &dum, &dum, &dum, &dum },
+      { &dum, &dum, &dum, &dum },
     },
-    non_resizable={true,true},
-  }
-
-  button := gui.Item{
-    data=gui.ButtonItem{
-      label="BUTTON"
+    {
+      { nil,  nil,  nil,  nil },
+      { nil,  nil,  nil,  nil },
+      { nil,  &dum, nil,  nil },
+      { nil,  nil,  nil,  nil },
     },
-    non_resizable={false,true},
-    border_style=.GLOBAL,
-  }
-
-  box1 := gui.Item{
-    data=gui.BoxItem{
-      content={&txt1, &button, &img}
-    },
-    non_resizable={true,false},
-  }
-
-  box2 := gui.Item{
-    data=gui.BoxItem{
-      header="BOX2",
-      content={&txt2}
+    {
+      { nil,  nil,  nil,  nil },
+      { nil,  nil,  nil,  nil },
+      { nil,  nil,  nil,  nil },
+      { nil,  nil,  nil,  nil },
     }
   }
+  player: dgn.PlayerState = {pos={z=1}}
+  stretch: f32 = 2
 
-  win1: gui.Window = {
-    draggable=true,
-    item=&gui.Item {
-      data=gui.BoxItem{
-        header="HEADER",
-        content={&txt2, &box1},
-        layout=.HORIZONTAL,
-      },
-      border_style=.GLOBAL
-    },
-  }
-
-  win2: gui.Window = {
-    draggable=true,
-    item=&gui.Item{
-      data=gui.BoxItem{
-      },
-      border_style=.LINE
-    }
-  }
-
-  wlist := []^gui.Window{ 
-    &win1, &win2
-  }
-
-  vfps_counter := 0
+  dgn.update_first_person(bmap, player, first_person_rtxr, stretch)
+  dgn.update_minimap(5, bmap, player, minimap_rtxr)
 
   /* ============================= MAIN LOOP ================================ */
 
-  rl.HideCursor()
+  //rl.HideCursor()
 
-  for false == rl.WindowShouldClose()
+  for !rl.WindowShouldClose()
   {
+    /*
+    // TODO: Maybe this should go into the GUI package
+
     mpos := rl.GetMousePosition()
     mpos.x = math.trunc(mpos.x / g.SCALE)
     mpos.y = math.trunc(mpos.y / g.SCALE)
@@ -173,18 +105,131 @@ main :: proc()
     mpos.y = (mpos.y < 0) ? 0 : mpos.y
     mpos.x = (g.NAT_SCR_W < mpos.x) ? g.NAT_SCR_W : mpos.x
     mpos.y = (g.NAT_SCR_H < mpos.y) ? g.NAT_SCR_H : mpos.y
+    */
+
+    key_pressed := rl.GetKeyPressed()
+    old_player := player
+    old_stretch := stretch
+    #partial switch key_pressed
+    {
+    case .W:
+      switch player.dir
+      {
+      case .NORTH: player.y -= (0        < player.y)              ? 1 : 0
+      case .EAST:  player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
+      case .SOUTH: player.y += (player.y < (len(bmap[0]) - 1))    ? 1 : 0
+      case .WEST:  player.x -= (0        < player.x)              ? 1 : 0
+      }
+    case .S:
+      switch player.dir
+      {
+      case .NORTH: player.y += (player.y < (len(bmap[0]) - 1))    ? 1 : 0
+      case .EAST:  player.x -= (0        < player.x)              ? 1 : 0
+      case .SOUTH: player.y -= (0        < player.y)              ? 1 : 0
+      case .WEST:  player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
+      }
+    case .A:
+      switch player.dir
+      {
+      case .NORTH: player.x -= (0        < player.x)              ? 1 : 0
+      case .EAST:  player.y -= (0        < player.y)              ? 1 : 0
+      case .SOUTH: player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
+      case .WEST:  player.y += (player.y < (len(bmap[0]) - 1 ))   ? 1 : 0
+      }
+    case .D:
+      switch player.dir
+      {
+      case .NORTH: player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
+      case .EAST:  player.y += (player.y < (len(bmap[0]) - 1 ))   ? 1 : 0
+      case .SOUTH: player.x -= (0        < player.x)              ? 1 : 0
+      case .WEST:  player.y -= (0        < player.y)              ? 1 : 0
+      }
+    case .Q:
+      switch player.dir
+      {
+      case .NORTH: player.dir = .WEST
+      case .EAST:  player.dir = .NORTH
+      case .SOUTH: player.dir = .EAST
+      case .WEST:  player.dir = .SOUTH
+      }
+    case .E:
+      switch player.dir
+      {
+      case .NORTH: player.dir = .EAST
+      case .EAST:  player.dir = .SOUTH
+      case .SOUTH: player.dir = .WEST
+      case .WEST:  player.dir = .NORTH
+      }
+    case .R:    player.z += (player.z < (len(bmap) - 1)) ? 1 : 0
+    case .F:    player.z -= (0        < player.z)        ? 1 : 0
+    case .UP:   stretch += 0.1
+    case .DOWN: stretch -= (0.1 < stretch) ? 0.1 : 0
+    }
+
+    must_update := false
+    #partial switch key_pressed
+    {
+    case .W, .S, .A, .D, .R, .F: must_update = (old_player.pos != player.pos)
+    case .Q, .E:                 must_update = (old_player.dir != player.dir)
+    case .UP, .DOWN:             must_update = (old_stretch    != stretch)
+
+    }
+    if must_update
+    {
+      dgn.update_first_person(bmap, player, first_person_rtxr, stretch)
+      dgn.update_minimap(5, bmap, player, minimap_rtxr)
+    }
 
     rl.BeginTextureMode(rtxr)
     {
-      rl.DrawTexture(bliss, 0, 0, rl.WHITE)
+      rl.ClearBackground(rl.DARKBLUE)
 
-      gui.process_window_list_input(wlist, mpos)
-      gui.draw_window_list(wlist)
+      rl.DrawTexturePro(
+        first_person_rtxr.texture,
+        {
+          0,
+          0,
+          f32(first_person_rtxr.texture.width),
+          -f32(first_person_rtxr.texture.height),
+        },
+        {
+          (g.NAT_SCR_W - f32(first_person_rtxr.texture.width))  / 2,
+          (g.NAT_SCR_H - f32(first_person_rtxr.texture.height)) / 2,
+          f32(first_person_rtxr.texture.width),
+          f32(first_person_rtxr.texture.height),
+        },
+        0,
+        0,
+        rl.WHITE
+        )
 
+      rl.DrawTexturePro(
+        minimap_rtxr.texture,
+        {
+          0,
+          0,
+          f32(minimap_rtxr.texture.width),
+          -f32(minimap_rtxr.texture.height),
+        },
+        {
+          12,
+          12,
+          f32(minimap_rtxr.texture.width),
+          f32(minimap_rtxr.texture.height),
+        },
+        0,
+        0,
+        rl.WHITE
+        )
+
+
+      /*
+      // TODO: move this cursor thing into its own package
       cursor_txr_offset: f32 = 0
       cursor_pos := rl.GetMousePosition()
       cursor_pos.x = math.trunc(cursor_pos.x / g.SCALE)
       cursor_pos.y = math.trunc(cursor_pos.y / g.SCALE)
+      // Should not depend on GUI
       #partial switch gui.get_cursor_state()
       {
       case .POTENTIAL:
@@ -216,6 +261,7 @@ main :: proc()
         { cursor_txr_offset, 0, 16, 16 },
         cursor_pos,
         rl.WHITE)
+      */
     }
     rl.EndTextureMode()
 
@@ -232,12 +278,10 @@ main :: proc()
     }
     rl.EndDrawing()
   }
-    rl.UnloadTexture(danta)
-    rl.UnloadTexture(bliss)
-    rl.UnloadTexture(border)
-    rl.UnloadTexture(cursor_txr)
-    rl.UnloadFont(font)
+    //rl.UnloadTexture(cursor_txr)
     rl.UnloadRenderTexture(rtxr)
+    rl.UnloadRenderTexture(first_person_rtxr)
+    rl.UnloadRenderTexture(minimap_rtxr)
 
     rl.CloseWindow()
 }

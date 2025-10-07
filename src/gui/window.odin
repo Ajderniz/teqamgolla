@@ -17,6 +17,8 @@ Window :: struct {
   using item : ^Item
 }
 
+// TODO: consider making windows contain a RenderTexture
+
 @(private)
 draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 {

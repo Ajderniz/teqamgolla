@@ -6,12 +6,13 @@
 
 package gui
 
-import    "core:log"
-import    "core:math"
+import     "core:log"
+import     "core:math"
+import str "core:strings"
 
-import rl "vendor:raylib"
+import rl  "vendor:raylib"
 
-import    "../global"
+import     "../global"
 
 ActionState :: enum {
   NONE,
@@ -68,6 +69,14 @@ are_rectangles_overlapping :: #force_inline proc(
 {
   return(!(((rec1.x + rec1.width) < rec2.x || (rec2.x + rec2.width) < rec1.x) ||
          ((rec1.y + rec1.height) < rec2.y || (rec2.y + rec2.height) < rec1.y)))
+}
+
+@(private)
+get_text_size :: proc(txt: string, font: rl.Font) -> rl.Vector2
+{
+  txt_cstring := str.clone_to_cstring(txt)
+  defer delete(txt_cstring)
+  return rl.MeasureTextEx(font, txt_cstring, f32(font.baseSize), 0)
 }
 
 process_window_list_input :: proc(list: []^Window, mouse_pos: rl.Vector2)

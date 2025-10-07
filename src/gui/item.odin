@@ -99,7 +99,7 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
     item.min_size.y = (item.min_size.y < og_size.y)? og_size.y : item.min_size.y
 
   case ButtonItem:
-    item.min_size = get_button_item_label_size(data, font)
+    item.min_size = get_text_size(data.label, font)
 
   case BoxItem:
 
