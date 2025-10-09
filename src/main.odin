@@ -68,23 +68,34 @@ main :: proc()
     )
   minimap_rtxr := rl.LoadRenderTexture(100, 100)
 
+  wall_txr := rl.LoadTexture("../res/img/wall.png")
+  rl.SetTextureFilter(wall_txr, .BILINEAR)
+  wall_east: dgn.Face = { base=wall_txr }
+
   dum: dgn.Block
+  dum.faces[.TOP] = &wall_east
+  dum.faces[.NORTH] = &wall_east
+  dum.faces[.EAST] = &wall_east
+  dum.faces[.SOUTH] = &wall_east
+  dum.faces[.WEST] = &wall_east
+  dum.faces[.BOTTOM] = &wall_east
+
   bmap: dgn.BlockMap = {
     {
       { &dum, &dum, &dum, &dum },
       { &dum, &dum, &dum, &dum },
-      { &dum, &dum, &dum, &dum },
+      { &dum, &dum, nil,  &dum },
       { &dum, &dum, &dum, &dum },
     },
     {
       { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
+      { nil,  &dum, nil,  nil },
       { nil,  &dum, nil,  nil },
       { nil,  nil,  nil,  nil },
     },
     {
       { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
+      { nil,  &dum, nil,  nil },
       { nil,  nil,  nil,  nil },
       { nil,  nil,  nil,  nil },
     }
@@ -164,7 +175,6 @@ main :: proc()
     case .W, .S, .A, .D, .R, .F: must_update = (old_player.pos != player.pos)
     case .Q, .E:                 must_update = (old_player.dir != player.dir)
     case .UP, .DOWN:             must_update = (old_stretch    != stretch)
-
     }
     if must_update
     {

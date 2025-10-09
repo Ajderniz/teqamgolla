@@ -4,6 +4,11 @@ import    "core:log"
 import    "core:math"
 
 import rl "vendor:raylib"
+import    "vendor:raylib/rlgl"
+
+Vector3Int :: struct { x, y, z: int }
+Vector2Int :: struct { x, y: int }
+Move3      :: struct { side, forw, elev: int }
 
 Angle     :: enum { 
   V0   = 0,
@@ -11,6 +16,7 @@ Angle     :: enum {
   V180 = 180,
   H270 = 270,
 }
+
 Direction :: enum {
   NORTH = int(Angle.V0),
   EAST  = int(Angle.H90),
@@ -18,20 +24,20 @@ Direction :: enum {
   WEST  = int(Angle.H270),
 }
 
-Vector3Int :: struct { x, y, z: int }
+SurfaceTextureSet :: map[Angle]^rl.Texture
 
 Face :: struct {
-  texture : rl.Texture,
-  angles  : map[Angle]^rl.Texture
+  base      : rl.Texture,
+  surface   : SurfaceTextureSet,
+  wall      : [enum{H90, H270}]^rl.Texture,
 }
 
 Block :: struct {
-  faces : map[Direction]^Face,
-  floor : ^Face,
-  ceil  : ^Face,
+  faces : [enum{TOP, NORTH, EAST, SOUTH, WEST, BOTTOM}]^Face
 }
 
 BlockMap :: [][][]^Block
+@(private) BlockFOV :: [3][5][5]^Block
 
 PlayerState :: struct {
   using pos: Vector3Int,
@@ -39,8 +45,33 @@ PlayerState :: struct {
 }
 
 @(private)
+draw_texture_skewed :: proc(
+  txr: rl.Texture,
+  tl, bl, br, tr: rl.Vector2,
+  color: rl.Color,
+  ) {
+  rlgl.SetTexture(txr.id)
+  rlgl.Begin(rlgl.QUADS)
+  {
+    rlgl.Color4ub(color.r, color.g, color.b, color.a)
+    rlgl.TexCoord2f(0, 0); rlgl.Vertex2f(tl.x, tl.y)
+    rlgl.TexCoord2f(0, 1); rlgl.Vertex2f(bl.x, bl.y)
+    rlgl.TexCoord2f(1, 1); rlgl.Vertex2f(br.x, br.y)
+    rlgl.TexCoord2f(1, 0); rlgl.Vertex2f(tr.x, tr.y)
+  }
+  rlgl.End()
+  rlgl.SetTexture(0)
+}
+
+@(private) BlockDrawOptions :: bit_set[enum{ FRONT, SIDE_V, SIDE_H }]
+@(private)
 draw_block_at_fov_position :: proc(
-  pos       : struct { side, forw, elev: int },
+  block     : Block,
+  dir       : Direction,
+
+  pos       : Move3,
+  options   : BlockDrawOptions,
+
   scr_size  : rl.Vector2,
   zero_size : rl.Vector2,
   stretch   : f32
@@ -56,23 +87,50 @@ draw_block_at_fov_position :: proc(
     math.trunc((scr_size.y - near_size.y) / 2) + (near_size.y * f32(pos.elev))
   }
 
-  color := rl.ORANGE
+  color := rl.WHITE
   if 0 < pos.forw || pos.side != 0
   {
-    color.r /= u8(pos.forw + math.abs(pos.side) )
-    color.g /= u8(pos.forw + math.abs(pos.side) )
-    color.b /= u8(pos.forw + math.abs(pos.side) )
+    color.r /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
+    color.g /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
+    color.b /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
   }
 
-  rl.DrawRectangleLinesEx(
+  face: ^Face
+
+  if .FRONT in options
+  {
+    switch dir
     {
-      near_pos.x,
-      near_pos.y,
-      near_size.x,
-      near_size.y,
-    },
-    1,
-    color)
+    case .NORTH: face = block.faces[.SOUTH]
+    case .EAST:  face = block.faces[.WEST]
+    case .SOUTH: face = block.faces[.NORTH]
+    case .WEST:  face = block.faces[.EAST]
+    }
+    if face != nil && rl.IsTextureValid(face.base)
+    {
+      rl.DrawTexturePro(
+        face.base,
+        { 0, 0, f32(face.base.width), f32(face.base.height) },
+        { near_pos.x, near_pos.y, near_size.x, near_size.y },
+        { 0, 0 },
+        0,
+        color
+        )
+    }
+    else
+    {
+      rl.DrawRectangleLinesEx(
+        {
+          near_pos.x,
+          near_pos.y,
+          near_size.x,
+          near_size.y,
+        },
+        1,
+        color
+        )
+    }
+  }
 
   side_faces:
   {
@@ -96,18 +154,32 @@ draw_block_at_fov_position :: proc(
     points := make([^]rl.Vector2, 4)
     defer free(points)
 
-    if pos.side != 0
+    txr: ^rl.Texture
+
+    if pos.side != 0 && .SIDE_V in options
     {
+      face = nil
+
       points[0].y = near_pos.y
       points[1].y = far_pos.y
       points[2].y = far_edg.y
       points[3].y = near_edg.y
+
       if pos.side < 0
       {
         points[0].x = near_edg.x
         points[1].x = far_edg.x
         points[2].x = far_edg.x
         points[3].x = near_edg.x
+
+        switch dir
+        {
+        case .NORTH: face = block.faces[.EAST]
+        case .EAST:  face = block.faces[.SOUTH]
+        case .SOUTH: face = block.faces[.WEST]
+        case .WEST:  face = block.faces[.NORTH]
+        }
+        txr = (face != nil) ? face.wall[.H90] : {}
       }
       else
       {
@@ -115,21 +187,76 @@ draw_block_at_fov_position :: proc(
         points[1].x = far_pos.x
         points[2].x = far_pos.x
         points[3].x = near_pos.x
+
+        switch dir
+        {
+        case .NORTH: face = block.faces[.WEST]
+        case .EAST:  face = block.faces[.NORTH]
+        case .SOUTH: face = block.faces[.EAST]
+        case .WEST:  face = block.faces[.SOUTH]
+        }
+        txr = (face != nil) ? face.wall[.H270] : {}
       }
-      rl.DrawLineStrip(points, 4, color)
+
+      if face != nil
+      {
+        if txr != nil && rl.IsTextureValid(txr^)
+        {
+          rl.DrawTexturePro(
+            txr^,
+            { 0, 0, f32(txr.width), f32(txr.height) },
+            { 
+              min(points[0].x, points[1].x),
+              points[0].y,
+              abs(points[0].x - points[1].x),
+              points[3].y - points[0].y
+            },
+            { 0, 0 },
+            0,
+            color)
+        }
+        else if rl.IsTextureValid(face.base)
+        {
+          tl, bl, br, tr: rl.Vector2
+          if points[0].x < points[1].x
+          {
+            tl = points[0]
+            bl = points[3]
+            br = points[2]
+            tr = points[1]
+          }
+          else
+          {
+            tl = points[1]
+            bl = points[2]
+            br = points[3]
+            tr = points[0]
+          }
+          draw_texture_skewed(face.base, tl, bl, br, tr, color)
+        }
+      }
+      else
+      {
+        rl.DrawLineStrip(points, 4, color)
+      }
     }
-    if pos.elev != 0
+    if pos.elev != 0 && .SIDE_H in options
     {
+      face = nil
+
       points[0].x = near_pos.x
       points[1].x = far_pos.x
       points[2].x = far_edg.x
       points[3].x = near_edg.x
+
       if pos.elev < 0
       {
         points[0].y = near_edg.y
         points[1].y = far_edg.y
         points[2].y = far_edg.y
         points[3].y = near_edg.y
+
+        face = block.faces[.BOTTOM]
       }
       else
       {
@@ -137,10 +264,118 @@ draw_block_at_fov_position :: proc(
         points[1].y = far_pos.y
         points[2].y = far_pos.y
         points[3].y = near_pos.y
+
+        face = block.faces[.TOP]
       }
-      rl.DrawLineStrip(points, 4, color)
+
+      if face != nil
+      {
+        txr: ^rl.Texture
+        switch dir
+        {
+        case .NORTH: txr = face.surface[.V180]
+        case .EAST:  txr = face.surface[.H270]
+        case .SOUTH: txr = face.surface[.V0]
+        case .WEST:  txr = face.surface[.H90]
+        }
+
+        if txr != nil && rl.IsTextureValid(txr^)
+        {
+          rl.DrawTexturePro(
+            txr^,
+            { 0, 0, f32(txr.width), f32(txr.height) },
+            { 
+              points[0].x, 
+              min(points[0].y, points[1].y),
+              points[3].x - points[0].x,
+              abs(points[0].y - points[1].y)
+            },
+            { 0, 0 },
+            0,
+            color)
+        }
+        else
+        {
+          tl, bl, br, tr: rl.Vector2
+          if points[0].y < points[1].y
+          {
+            tl = points[0]
+            bl = points[1]
+            br = points[2]
+            tr = points[3]
+          }
+          else
+          {
+            tl = points[1]
+            bl = points[0]
+            br = points[3]
+            tr = points[2]
+          }
+          draw_texture_skewed(face.base, tl, bl, br, tr, color)
+        }
+      }
+      else
+      {
+        rl.DrawLineStrip(points, 4, color)
+      }
     }
   }
+}
+
+@(private)
+is_block_visible :: proc(dst: Move3, fov: BlockFOV)-> bool
+{
+  dif_side := dst.side
+  inc_side := 1
+  if dst.side < 0
+  {
+    dif_side = -dif_side
+    inc_side = -1
+  }
+  err_side := (2 * dif_side) - dst.forw
+
+  dif_elev := dst.elev
+  inc_elev := 1
+  if dst.elev < 0
+  {
+    dif_elev = -dif_elev
+    inc_elev = -1
+  }
+  err_elev := (2 * dif_elev) - dst.forw
+
+  side, elev := 0, 0
+  for forw in 0..<(dst.forw+1)
+  {
+    if side == dst.side && forw == dst.forw && elev == dst.elev
+    {
+      break
+    }
+    if fov[elev + (len(fov)/2)][forw][side + (len(fov[0][0])/2)] != nil
+    {
+      return false
+    }
+
+    if 0 < err_side
+    {
+      side     += inc_side
+      err_side += 2 * (dif_side - dst.forw)
+    }
+    else
+    {
+      err_side += 2 * dif_side
+    }
+
+    if 0 < err_elev
+    {
+      elev     += inc_elev
+      err_elev += 2 * (dif_elev - dst.forw)
+    }
+    else
+    {
+      err_elev += 2 * dif_elev
+    }
+  }
+  return true
 }
 
 update_first_person :: proc(
@@ -150,8 +385,8 @@ update_first_person :: proc(
   stretch : f32
   )
 {
-  fov: [3][5][3]^Block
-  set_fov:
+  fov: BlockFOV
+  build_fov:
   {
     pos := player.pos
     dir := player.dir
@@ -159,8 +394,9 @@ update_first_person :: proc(
     elev := -(len(fov) / 2)
     for &layer in fov
     {
+      defer elev += 1
+
       z := pos.z + elev
-      elev += 1
       if z < 0 || len(bmap) <= z
       {
         continue
@@ -184,6 +420,8 @@ update_first_person :: proc(
         side := -(len(row) / 2)
         for &block in row
         {
+          defer side += 1
+
           switch dir
           {
           case .NORTH: x = pos.x + side
@@ -191,11 +429,12 @@ update_first_person :: proc(
           case .SOUTH: x = pos.x - side
           case .WEST:  y = pos.y - side
           }
-          side += 1
+
           if y < 0 || len(bmap[0]) <= y || x < 0 || len(bmap[0][0]) <= x
           {
             continue
           }
+
           block = bmap[z][y][x]
         }
       }
@@ -212,31 +451,99 @@ update_first_person :: proc(
       f32(rtxr.texture.height) * 1.5
     }
 
-    z := len(fov) / 2
-    for layer in fov
+    draw_layer :: proc(
+      fov       : BlockFOV,
+      elev, z   : int,
+      rtxr_size : rl.Vector2,
+      zero_size : rl.Vector2,
+      dir       : Direction,
+      stretch   : f32,
+      )
     {
-      #reverse for row, y in layer
+      layer := fov[z]
+
+      #reverse for row, forw in layer
       {
-        x := -(len(row) / 2)
-        for block in row
+        side := -(len(row) / 2)
+        for block, x in row
         {
+          defer side += 1
+
           if nil == block
           {
-            x += 1
             continue
           }
+          if 3 <= forw && !is_block_visible({side, forw, elev}, fov)
+          {
+            continue
+          }
+
+          options: BlockDrawOptions
+
+          if side < 0
+          {
+            options += (nil == row[x+1]) ? { .SIDE_V } : options
+          }
+          else if 0 < side
+          {
+            options += (nil == row[x-1]) ? { .SIDE_V } : options
+          }
+
+          if 0 < forw
+          {
+            options += (nil == layer[forw-1][x]) ? { .FRONT } : options
+          }
+
+          // Remember that for Z (just in this case), lower is higher
+          if elev < 0
+          {
+            options += (nil == fov[z-1][forw][x]) ? {.SIDE_H } : options
+          }
+          else if 0 < elev
+          {
+            options += (nil == fov[z+1][forw][x]) ? {.SIDE_H } : options
+          }
+
           draw_block_at_fov_position(
-            { x, y, z },
-            { f32(rtxr.texture.width), f32(rtxr.texture.height) },
+            block^,
+            dir,
+            { side, forw, elev },
+            options,
+            rtxr_size,
             zero_size,
             stretch
             )
-
-          x += 1
         }
       }
-      z -= 1
     }
+
+    elev := (len(fov) / 2)
+    for layer, z in fov
+    {
+      defer elev -= 1
+
+      if 0 == elev
+      {
+        continue
+      }
+
+      draw_layer(
+        fov,
+        elev,
+        z,
+        {f32(rtxr.texture.width), f32(rtxr.texture.height)},
+        zero_size,
+        player.dir,
+        stretch)
+    }
+    draw_layer(
+      fov,
+      0,
+      1,
+      {f32(rtxr.texture.width), f32(rtxr.texture.height)},
+      zero_size,
+      player.dir,
+      stretch)
   }
   rl.EndTextureMode()
 }
@@ -261,28 +568,27 @@ update_minimap :: proc(
       by := player.y - half_mm_size
       for y := 0; y <= mm_size; y += 1
       {
+        defer by += 1
+
         if by < 0 || player.y + (mm_size/2) < by || len(bmap[bz]) <= by
         {
-          by += 1
           continue
         }
         bx := player.x - half_mm_size
         for x := 0; x <= mm_size; x += 1
         {
+          defer bx += 1
+
           if bx < 0 || player.x + half_mm_size < bx || len(bmap[bz][by]) <= bx||
              nil == bmap[bz][by][bx] ||
              (bz < player.z && bmap[bz+1][by][bx] != nil)
           {
-            bx += 1
             continue
           }
           rl.DrawRectangleRec(
             { f32(x) * block_size, f32(y) * block_size, block_size, block_size},
             color)
-
-          bx += 1
         }
-        by += 1
       }
       color.r -= (25 <= color.r) ? 25 : 0
       color.g -= (25 <= color.g) ? 25 : 0
