@@ -15,6 +15,7 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
+import     "cursor"
 import dgn "dungeon"
 import     "gui"
 
@@ -61,6 +62,8 @@ main :: proc()
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
   rl.SetTargetFPS(FPS)
 
+  cursor.init("../res/img/cursor.png")
+
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
   first_person_rtxr := rl.LoadRenderTexture(
     i32(math.trunc(f32(NAT_SCR_H) * .75)),
@@ -83,19 +86,19 @@ main :: proc()
   bmap: dgn.BlockMap = {
     {
       { &dum, &dum, &dum, &dum },
-      { &dum, &dum, &dum, &dum },
-      { &dum, &dum, nil,  &dum },
-      { &dum, &dum, &dum, &dum },
-    },
-    {
       { nil,  nil,  nil,  nil },
-      { nil,  &dum, nil,  nil },
-      { nil,  &dum, nil,  nil },
+      { nil,  nil,  nil,  nil },
       { nil,  nil,  nil,  nil },
     },
     {
+      { &dum, &dum, &dum, &dum },
       { nil,  nil,  nil,  nil },
-      { nil,  &dum, nil,  nil },
+      { nil,  nil,  nil,  nil },
+      { nil,  nil,  nil,  nil },
+    },
+    {
+      { &dum, &dum, &dum, &dum },
+      { nil,  nil,  nil,  nil },
       { nil,  nil,  nil,  nil },
       { nil,  nil,  nil,  nil },
     }
@@ -223,6 +226,8 @@ main :: proc()
         0,
         rl.WHITE
         )
+
+      //cursor.draw(SCALE)
     }
     rl.EndTextureMode()
 
@@ -239,6 +244,7 @@ main :: proc()
     }
     rl.EndDrawing()
   }
+    cursor.fini()
     rl.UnloadRenderTexture(rtxr)
     rl.UnloadRenderTexture(first_person_rtxr)
     rl.UnloadRenderTexture(minimap_rtxr)

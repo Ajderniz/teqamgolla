@@ -24,12 +24,9 @@ Direction :: enum {
   WEST  = int(Angle.H270),
 }
 
-SurfaceTextureSet :: map[Angle]^rl.Texture
-
 Face :: struct {
-  base      : rl.Texture,
-  surface   : SurfaceTextureSet,
-  wall      : [enum{H90, H270}]^rl.Texture,
+  base : rl.Texture,
+  side : map[Angle][enum{LESSER, EQUAL, GREATER}]^rl.Texture
 }
 
 Block :: struct {
@@ -46,18 +43,28 @@ PlayerState :: struct {
 
 @(private)
 draw_texture_skewed :: proc(
-  txr: rl.Texture,
-  tl, bl, br, tr: rl.Vector2,
-  color: rl.Color,
+  txr            : rl.Texture,
+  tl, bl, br, tr : rl.Vector2,
+  angle          : Angle,
+  color          : rl.Color,
   ) {
+  coords: [4]rl.Vector2
+  switch angle
+  {
+  case .V0:   coords = { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } }
+  case .H90:  coords = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 } }
+  case .V180: coords = { { 1, 1 }, { 1, 0 }, { 0, 0 }, { 0 ,1 } }
+  case .H270: coords = { { 1, 0 }, { 0, 0 }, { 0 ,1 }, { 1, 1 } }
+  }
+
   rlgl.SetTexture(txr.id)
   rlgl.Begin(rlgl.QUADS)
   {
     rlgl.Color4ub(color.r, color.g, color.b, color.a)
-    rlgl.TexCoord2f(0, 0); rlgl.Vertex2f(tl.x, tl.y)
-    rlgl.TexCoord2f(0, 1); rlgl.Vertex2f(bl.x, bl.y)
-    rlgl.TexCoord2f(1, 1); rlgl.Vertex2f(br.x, br.y)
-    rlgl.TexCoord2f(1, 0); rlgl.Vertex2f(tr.x, tr.y)
+    rlgl.TexCoord2f(coords[0].x, coords[0].y); rlgl.Vertex2f(tl.x, tl.y)
+    rlgl.TexCoord2f(coords[1].x, coords[1].y); rlgl.Vertex2f(bl.x, bl.y)
+    rlgl.TexCoord2f(coords[2].x, coords[2].y); rlgl.Vertex2f(br.x, br.y)
+    rlgl.TexCoord2f(coords[3].x, coords[3].y); rlgl.Vertex2f(tr.x, tr.y)
   }
   rlgl.End()
   rlgl.SetTexture(0)
@@ -77,10 +84,16 @@ draw_block_at_fov_position :: proc(
   stretch   : f32
   )
 {
+  if pos == { 0, 0 ,0 }
+  {
+    return
+  }
+
   near_size := rl.Vector2 {
       math.trunc(zero_size.x / math.pow(stretch, f32(pos.forw))),
       math.trunc(zero_size.y / math.pow(stretch, f32(pos.forw))),
   }
+  next_size_x := near_size - 1
   near_pos := rl.Vector2 {
     // Origin                                  +  Offset
     math.trunc((scr_size.x - near_size.x) / 2) + (near_size.x * f32(pos.side)),
@@ -158,6 +171,7 @@ draw_block_at_fov_position :: proc(
 
     if pos.side != 0 && .SIDE_V in options
     {
+      rotation: f32
       face = nil
 
       points[0].y = near_pos.y
@@ -179,7 +193,17 @@ draw_block_at_fov_position :: proc(
         case .SOUTH: face = block.faces[.WEST]
         case .WEST:  face = block.faces[.NORTH]
         }
-        txr = (face != nil) ? face.wall[.H90] : {}
+        if face != nil
+        {
+          set := face.side[.H270]
+          switch pos.elev
+          {
+          case -1: txr = set[.GREATER]
+          case  1: txr = set[.LESSER]
+          case:    txr = set[.EQUAL]
+          }
+        }
+        rotation = 90
       }
       else
       {
@@ -195,24 +219,34 @@ draw_block_at_fov_position :: proc(
         case .SOUTH: face = block.faces[.EAST]
         case .WEST:  face = block.faces[.SOUTH]
         }
-        txr = (face != nil) ? face.wall[.H270] : {}
+        if face != nil
+        {
+          set := face.side[.H90]
+          switch pos.elev
+          {
+          case -1: txr = set[.LESSER]
+          case  1: txr = set[.GREATER]
+          case:    txr = set[.EQUAL]
+          }
+        }
+        rotation = 270
       }
-
       if face != nil
       {
         if txr != nil && rl.IsTextureValid(txr^)
         {
+          center := rl.Vector2 { f32(txr.width / 2), f32(txr.height / 2) }
           rl.DrawTexturePro(
             txr^,
             { 0, 0, f32(txr.width), f32(txr.height) },
             { 
-              min(points[0].x, points[1].x),
-              points[0].y,
+              (min(points[0].x, points[1].x) + center.x),
+              (min(points[0].y, points[1].y) + center.y),
               abs(points[0].x - points[1].x),
-              points[3].y - points[0].y
+              (points[3].y - points[0].y)
             },
-            { 0, 0 },
-            0,
+            center,
+            rotation,
             color)
         }
         else if rl.IsTextureValid(face.base)
@@ -232,7 +266,7 @@ draw_block_at_fov_position :: proc(
             br = points[3]
             tr = points[0]
           }
-          draw_texture_skewed(face.base, tl, bl, br, tr, color)
+          draw_texture_skewed(face.base, tl, bl, br, tr, Angle.V0, color)
         }
       }
       else
@@ -240,8 +274,11 @@ draw_block_at_fov_position :: proc(
         rl.DrawLineStrip(points, 4, color)
       }
     }
+
     if pos.elev != 0 && .SIDE_H in options
     {
+      surf_color := color
+      angle: Angle
       face = nil
 
       points[0].x = near_pos.x
@@ -257,6 +294,10 @@ draw_block_at_fov_position :: proc(
         points[3].y = near_edg.y
 
         face = block.faces[.BOTTOM]
+
+        surf_color.r = (50 <= surf_color.r) ? surf_color.r - 50 : 0
+        surf_color.g = (50 <= surf_color.g) ? surf_color.g - 50 : 0
+        surf_color.b = (50 <= surf_color.b) ? surf_color.b - 50 : 0
       }
       else
       {
@@ -266,33 +307,44 @@ draw_block_at_fov_position :: proc(
         points[3].y = near_pos.y
 
         face = block.faces[.TOP]
+
+        surf_color.r = (surf_color.r < 255) ? surf_color.r + 50 : 255
+        surf_color.g = (surf_color.g < 255) ? surf_color.g + 50 : 255
+        surf_color.b = (surf_color.b < 255) ? surf_color.b + 50 : 255
       }
 
       if face != nil
       {
-        txr: ^rl.Texture
         switch dir
         {
-        case .NORTH: txr = face.surface[.V180]
-        case .EAST:  txr = face.surface[.H270]
-        case .SOUTH: txr = face.surface[.V0]
-        case .WEST:  txr = face.surface[.H90]
+        case .NORTH: angle = .V0
+        case .EAST:  angle = .H270
+        case .SOUTH: angle = .V180
+        case .WEST:  angle = .H90
         }
-
+        {
+          set := face.side[angle]
+          switch pos.side
+          {
+          case -1: txr = set[.LESSER]
+          case  1: txr = set[.GREATER]
+          case:    txr = set[.EQUAL]
+          }
+        }
         if txr != nil && rl.IsTextureValid(txr^)
         {
           rl.DrawTexturePro(
             txr^,
             { 0, 0, f32(txr.width), f32(txr.height) },
             { 
-              points[0].x, 
+              min(points[0].x, points[1].x),
               min(points[0].y, points[1].y),
               points[3].x - points[0].x,
               abs(points[0].y - points[1].y)
             },
             { 0, 0 },
             0,
-            color)
+            surf_color)
         }
         else
         {
@@ -311,12 +363,12 @@ draw_block_at_fov_position :: proc(
             br = points[3]
             tr = points[2]
           }
-          draw_texture_skewed(face.base, tl, bl, br, tr, color)
+          draw_texture_skewed(face.base, tl, bl, br, tr, angle, surf_color)
         }
       }
       else
       {
-        rl.DrawLineStrip(points, 4, color)
+        rl.DrawLineStrip(points, 4, surf_color)
       }
     }
   }
@@ -473,7 +525,8 @@ update_first_person :: proc(
           {
             continue
           }
-          if 3 <= forw && !is_block_visible({side, forw, elev}, fov)
+          if 2 <= forw && (elev < -1 || 1 < elev) && 
+             !is_block_visible({side, forw, elev}, fov)
           {
             continue
           }
@@ -497,17 +550,17 @@ update_first_person :: proc(
           // Remember that for Z (just in this case), lower is higher
           if elev < 0
           {
-            options += (nil == fov[z-1][forw][x]) ? {.SIDE_H } : options
+            options += (nil == fov[z+1][forw][x]) ? {.SIDE_H } : options
           }
           else if 0 < elev
           {
-            options += (nil == fov[z+1][forw][x]) ? {.SIDE_H } : options
+            options += (nil == fov[z-1][forw][x]) ? {.SIDE_H } : options
           }
 
           draw_block_at_fov_position(
             block^,
             dir,
-            { side, forw, elev },
+            { side, forw, -elev },
             options,
             rtxr_size,
             zero_size,
@@ -517,10 +570,10 @@ update_first_person :: proc(
       }
     }
 
-    elev := (len(fov) / 2)
+    elev := -(len(fov) / 2)
     for layer, z in fov
     {
-      defer elev -= 1
+      defer elev += 1
 
       if 0 == elev
       {
@@ -539,7 +592,7 @@ update_first_person :: proc(
     draw_layer(
       fov,
       0,
-      1,
+      len(fov)/2,
       {f32(rtxr.texture.width), f32(rtxr.texture.height)},
       zero_size,
       player.dir,
@@ -563,36 +616,48 @@ update_minimap :: proc(
     rl.ClearBackground(rl.DARKPURPLE)
 
     color := rl.ORANGE
-    for bz := player.z; 0 <= bz; bz -= 1
+    color_step : u8 : 25
+    {
+      sub := u8(player.z + 1) * color_step
+      color.r = (sub <= color.r) ? color.r - sub : 0
+      color.g = (sub <= color.g) ? color.g - sub : 0
+      color.b = (sub <= color.b) ? color.b - sub : 0
+    }
+    for bz := 0; bz <= player.z; bz += 1
     {
       by := player.y - half_mm_size
       for y := 0; y <= mm_size; y += 1
       {
         defer by += 1
 
-        if by < 0 || player.y + (mm_size/2) < by || len(bmap[bz]) <= by
+        if by < 0 || (player.y + half_mm_size) < by || len(bmap[bz]) <= by
         {
           continue
         }
+
         bx := player.x - half_mm_size
         for x := 0; x <= mm_size; x += 1
         {
           defer bx += 1
 
-          if bx < 0 || player.x + half_mm_size < bx || len(bmap[bz][by]) <= bx||
-             nil == bmap[bz][by][bx] ||
-             (bz < player.z && bmap[bz+1][by][bx] != nil)
-          {
+          if bx < 0 || (player.x + half_mm_size) < bx || len(bmap[bz][by])<=bx||
+             nil == bmap[bz][by][bx] {//||
+             //(bz < player.z && bmap[bz+1][by][bx] != nil)
+          //{
             continue
           }
+
           rl.DrawRectangleRec(
             { f32(x) * block_size, f32(y) * block_size, block_size, block_size},
             color)
         }
       }
-      color.r -= (25 <= color.r) ? 25 : 0
-      color.g -= (25 <= color.g) ? 25 : 0
-      color.b -= (25 <= color.b) ? 25 : 0
+      {
+        limit :: 255 - color_step
+        color.r = (color.r <= limit) ? color.r + color_step : 255
+        color.g = (color.g <= limit) ? color.g + color_step : 255
+        color.b = (color.b <= limit) ? color.b + color_step : 255
+      }
     }
 
     half_block_size := block_size / 2
