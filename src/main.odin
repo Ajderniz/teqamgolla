@@ -15,9 +15,9 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-import     "cursor"
 import dgn "dungeon"
 import     "gui"
+import     "gui/cursor"
 
 NAT_SCR_W :: 640
 NAT_SCR_H :: (NAT_SCR_W / 4) * 3
@@ -62,8 +62,6 @@ main :: proc()
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
   rl.SetTargetFPS(FPS)
 
-  cursor.init("../res/img/cursor.png")
-
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
   first_person_rtxr := rl.LoadRenderTexture(
     i32(math.trunc(f32(NAT_SCR_H) * .75)),
@@ -98,13 +96,48 @@ main :: proc()
     },
     {
       { &dum, &dum, &dum, &dum },
-      { nil,  nil,  nil,  nil },
+      { nil,  nil,  &dum, nil },
       { nil,  nil,  nil,  nil },
       { nil,  nil,  nil,  nil },
     }
   }
   player: dgn.PlayerState = {pos={z=1}}
   stretch: f32 = 2
+
+  cursor.init("../res/img/cursor.png")
+  font := rl.LoadFont("../res/fonts/Px437_DOS-V_re_ANK16.ttf")
+  gui.init(font)
+
+  win1 := gui.Window {
+    draggable = true,
+    item = &gui.Item { 
+      data = gui.ImageItem {
+        texture = first_person_rtxr.texture,
+        is_rtxr = true
+      }
+    }
+  }
+  win2 := gui.Window {
+    draggable = true,
+    item = &gui.Item { 
+      data = gui.ImageItem {
+        texture = minimap_rtxr.texture,
+        is_rtxr = true,
+      }
+    }
+  }
+  wlist : []^gui.Window = { &win1, &win2 }
+
+  defer
+  {
+    rl.UnloadRenderTexture(rtxr)
+    rl.UnloadRenderTexture(first_person_rtxr)
+    rl.UnloadRenderTexture(minimap_rtxr)
+
+    cursor.fini()
+
+    rl.CloseWindow()
+  }
 
   dgn.update_first_person(bmap, player, first_person_rtxr, stretch)
   dgn.update_minimap(5, bmap, player, minimap_rtxr)
@@ -185,10 +218,15 @@ main :: proc()
       dgn.update_minimap(5, bmap, player, minimap_rtxr)
     }
 
+
+    gui.process_window_list_input(wlist, NAT_SCR_W, NAT_SCR_H, SCALE)
+
+
     rl.BeginTextureMode(rtxr)
     {
       rl.ClearBackground(rl.DARKBLUE)
 
+      /*
       rl.DrawTexturePro(
         first_person_rtxr.texture,
         {
@@ -226,8 +264,10 @@ main :: proc()
         0,
         rl.WHITE
         )
+      */
 
-      //cursor.draw(SCALE)
+      gui.draw_window_list(wlist)
+      cursor.draw(SCALE)
     }
     rl.EndTextureMode()
 
@@ -244,10 +284,4 @@ main :: proc()
     }
     rl.EndDrawing()
   }
-    cursor.fini()
-    rl.UnloadRenderTexture(rtxr)
-    rl.UnloadRenderTexture(first_person_rtxr)
-    rl.UnloadRenderTexture(minimap_rtxr)
-
-    rl.CloseWindow()
 }

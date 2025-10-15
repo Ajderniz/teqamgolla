@@ -6,11 +6,11 @@ import    "core:math"
 import rl "vendor:raylib"
 
 Window :: struct {
-  draggable  : bool,
-  act_state  : ActionState,
+  _act_state : ActionState,
+  _saved_rec : rl.Rectangle,
+  _maximized : bool,
 
-  maximized  : bool,
-  saved_rec  : rl.Rectangle,
+  draggable  : bool,
 
   using item : ^Item
 }
@@ -98,7 +98,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
   }
   draw_item(win.item, font, pad, fg_color, bg, highlight)
 
-  if .DRAG == win.act_state || .RESIZE == win.act_state
+  if .DRAG == win._act_state || .RESIZE == win._act_state
   {
     rl.DrawRectangleRec(
       { win.x + g_win_shadow, win.y + win.height, win.width, g_win_shadow },

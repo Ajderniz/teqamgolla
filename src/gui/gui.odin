@@ -12,7 +12,7 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-import     "../cursor"
+import     "cursor"
 
 ActionState :: enum {
   NONE,
@@ -103,7 +103,7 @@ process_window_list_input :: proc(
   for win, i in list
   {
     vf_check:
-    #partial switch win.act_state
+    #partial switch win._act_state
     {
       case .DRAG, .RESIZE, .SCROLL_DOWN, .SCROLL_UP:
         if frame_counter != 0
@@ -113,7 +113,7 @@ process_window_list_input :: proc(
     }
 
     action:
-    switch win.act_state
+    switch win._act_state
     {
     case .NONE:
       if 0 == i
@@ -211,11 +211,11 @@ process_window_list_input :: proc(
             {
               if .PREV == txt_item_dir
               {
-                win.act_state = .SCROLL_UP
+                win._act_state = .SCROLL_UP
               }
               else
               {
-                win.act_state = .SCROLL_DOWN
+                win._act_state = .SCROLL_DOWN
               }
             }
             else // PAGED
@@ -233,7 +233,7 @@ process_window_list_input :: proc(
 
           case ButtonItem:
             d.highlight = false
-            win.act_state = .BUTTON_DOWN
+            win._act_state = .BUTTON_DOWN
             break action
           }
         }
@@ -241,10 +241,10 @@ process_window_list_input :: proc(
         if win.draggable
         {
           mouse_offset = { (mouse_pos.x - win.x), (mouse_pos.y - win.y) }
-          win.act_state = .DRAG
+          win._act_state = .DRAG
           cursor.set_state(.DRAG)
 
-          win.maximized = false
+          win._maximized = false
         } 
         break action
 
@@ -257,7 +257,7 @@ process_window_list_input :: proc(
             )
           cursor.set_state(.RESIZE)
 
-          win.maximized = false
+          win._maximized = false
         }
         break action
 
@@ -268,9 +268,9 @@ process_window_list_input :: proc(
         {
           break action
         }
-        if !win.maximized
+        if !win._maximized
         {
-          win.saved_rec = win.rec
+          win._saved_rec = win.rec
 
           if !win.non_resizable.x
           {
@@ -283,14 +283,14 @@ process_window_list_input :: proc(
             win.height = scr_height
           }
 
-          win.maximized = true
+          win._maximized = true
         }
         else
         {
-          win.rec = win.saved_rec
-          win.maximized = false
+          win.rec = win._saved_rec
+          win._maximized = false
         }
-        win.act_state = .RESIZE
+        win._act_state = .RESIZE
 
         break action
       }
@@ -317,7 +317,7 @@ process_window_list_input :: proc(
     case .DRAG:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       win.x = mouse_pos.x - mouse_offset.x
@@ -326,7 +326,7 @@ process_window_list_input :: proc(
     case .RESIZE:
       if !rl.IsMouseButtonDown(.RIGHT)
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       win.width =  (!win.non_resizable.x) ? mouse_pos.x - win.x : win.width
@@ -335,7 +335,7 @@ process_window_list_input :: proc(
     case .SCROLL_UP, .SCROLL_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       
@@ -348,7 +348,7 @@ process_window_list_input :: proc(
       item := get_item_under_mouse(win.item, mouse_pos)
       if nil == item
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       txt_item: ^TextItem
@@ -359,7 +359,7 @@ process_window_list_input :: proc(
       }
       if nil == txt_item
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       if mouse_pos.y <= item.y + math.trunc(item.height / 2)
@@ -376,7 +376,7 @@ process_window_list_input :: proc(
     case .BUTTON_DOWN:
       if !rl.IsMouseButtonDown(.LEFT)
       {
-        win.act_state = .NONE
+        win._act_state = .NONE
         break windows
       }
       break windows
@@ -396,7 +396,7 @@ draw_window_list :: proc(list: []^Window)
   @(static) first_time := true
   #reverse for win, i in list
   {
-    draw_window(win, 0 == i, .RESIZE == win.act_state || first_time)
+    draw_window(win, 0 == i, .RESIZE == win._act_state || first_time)
   }
   if first_time
   {

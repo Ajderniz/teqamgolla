@@ -93,7 +93,6 @@ draw_block_at_fov_position :: proc(
       math.trunc(zero_size.x / math.pow(stretch, f32(pos.forw))),
       math.trunc(zero_size.y / math.pow(stretch, f32(pos.forw))),
   }
-  next_size_x := near_size - 1
   near_pos := rl.Vector2 {
     // Origin                                  +  Offset
     math.trunc((scr_size.x - near_size.x) / 2) + (near_size.x * f32(pos.side)),
