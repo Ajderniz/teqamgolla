@@ -35,10 +35,10 @@ draw_image_item :: proc(imgi: ImageItem, rec: rl.Rectangle)
       imgi.texture,
       src_rec,
       {
-        0,
-        0,
         rec.x + (rec.width - f32(imgi.texture.width)) / 2,
-        rec.y + (rec.height - f32(imgi.texture.height)) / 2
+        rec.y + (rec.height - f32(imgi.texture.height)) / 2,
+        f32(imgi.texture.width),
+        f32(imgi.texture.height)
       },
       {0,0},
       0,
