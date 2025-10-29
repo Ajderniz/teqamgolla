@@ -6,38 +6,38 @@
 
 package gui
 
-import     "core:log"
 import     "core:math"
 import str "core:strings"
 
 import rl  "vendor:raylib"
 
 import     "cursor"
+import inp "../input"
 
-ActionState :: enum {
-  NONE,
-  DRAG,
-  RESIZE,
-  SCROLL_UP,
-  SCROLL_DOWN,
-  BUTTON_DOWN,
+@(private)
+cfg: struct {
+  frame_delay   : int,
+  scroll_delay  : int,
+
+  font          : rl.Font,
+  pad           : f32,
+  fg_color      : rl.Color,
+  bg            : ItemBackground,
+
+  win_shadow    : f32,
+
+  line_thick    : f32,
+  border        : ItemBorder,
+
+  header_height : f32,
+  base_unit     : rl.Vector2
 }
 
-@(private) g_frame_delay   : int
-@(private) g_scroll_delay  : int
-
-@(private) g_font          : rl.Font
-@(private) g_pad           : f32
-@(private) g_fg_color      : rl.Color
-@(private) g_bg            : ItemBackground
-
-@(private) g_win_shadow    : f32
-
-@(private) g_line_thick    : f32
-@(private) g_border        : ItemBorder
-
-@(private) g_header_height : f32
-@(private) g_base_unit     : rl.Vector2
+@(private)
+st: struct {
+  wlist             : [dynamic]^Window,
+  button_pressed_id : int
+}
 
 @(private)
 is_v2_within_rec :: #force_inline proc(
@@ -66,31 +66,32 @@ get_text_size :: proc(txt: string, font: rl.Font) -> rl.Vector2
   return rl.MeasureTextEx(font, txt_cstring, f32(font.baseSize), 0)
 }
 
-process_window_list_input :: proc(
-  list       : []^Window,
-  scr_width  : f32,
-  scr_height : f32,
-  scr_scale  : f32)
-{
+process_input :: proc(
+  input           : inp.InputState,
+  scr_width       : f32,
+  scr_height      : f32,
+  scr_scale       : f32
+  ) {
+
   @(static) frame_counter: int
   @(static) scroll_counter: int
   @(static) mouse_offset: rl.Vector2
 
-  frame_counter = (frame_counter + 1) % g_frame_delay
+  frame_counter = (frame_counter + 1) % cfg.frame_delay
 
-  if rl.IsKeyPressed(.TAB)
+  if .TAB == input.key_pressed
   {
     if rl.IsKeyDown(.LEFT_SHIFT)
     {
-      move_window_index_to_index(list, 0, uint(len(list) - 1))
+      move_window_index_to_index(0, uint(len(st.wlist) - 1))
     }
     else
     {
-      move_window_index_to_index(list, uint(len(list) - 1), 0)
+      move_window_index_to_index(uint(len(st.wlist) - 1), 0)
     }
   }
 
-  mouse_pos := rl.GetMousePosition()
+  mouse_pos := input.mouse_pos
   mouse_pos.x = math.trunc(mouse_pos.x / scr_scale)
   mouse_pos.y = math.trunc(mouse_pos.y / scr_scale)
   mouse_pos.x = (mouse_pos.x < 0) ? 0 : mouse_pos.x
@@ -100,7 +101,7 @@ process_window_list_input :: proc(
 
   new_top_index := -1
   windows:
-  for win, i in list
+  for win, i in st.wlist
   {
     vf_check:
     #partial switch win._act_state
@@ -120,13 +121,6 @@ process_window_list_input :: proc(
       {
         cursor.set_state(.DEFAULT)
       }
-      else
-      {
-        /* 
-        TODO: check if this makes any sense
-        g_cursor_state = (g_cursor_state != .DEFAULT)? g_cursor_state : .DEFAULT
-        */
-      }
       
       if !is_v2_within_rec(mouse_pos, win.rec)
       {
@@ -134,7 +128,7 @@ process_window_list_input :: proc(
       }
       for j in 0..<i
       {
-        if is_v2_within_rec(mouse_pos, list[j].item.rec)
+        if is_v2_within_rec(mouse_pos, st.wlist[j].item.rec)
         {
           continue windows
         }
@@ -142,31 +136,15 @@ process_window_list_input :: proc(
       
       cursor.set_state(.POTENTIAL)
 
-      wheel_move := rl.GetMouseWheelMove()
-
-      button_pressed := rl.MouseButton.BACK
-      if rl.IsMouseButtonPressed(.LEFT)
-      {
-        button_pressed = .LEFT
-      }
-      else if rl.IsMouseButtonPressed(.RIGHT)
-      {
-        button_pressed = .RIGHT
-      }
-      else if rl.IsMouseButtonPressed(.MIDDLE)
-      {
-        button_pressed = .MIDDLE
-      }
-
-      item := get_item_under_mouse(win.item, mouse_pos)
+      item := get_sub_item_under_mouse(win.item, mouse_pos)
 
       txt_item_dir: enum{PREV, NEXT}
       if item != nil
       {
-        #partial switch &d in item.data
+        #partial switch &f in item.form
         {
         case TextItem:
-          if .VERTICAL == d.scroll_type
+          if .VERTICAL == f.scroll_type
           {
             if mouse_pos.y <= item.y + math.trunc(item.height / 2)
             {
@@ -194,20 +172,20 @@ process_window_list_input :: proc(
           }
 
         case ButtonItem:
-          d.highlight = true
+          f.hovered = true
           cursor.set_state(.DEFAULT)
         }
       }
 
-      #partial switch button_pressed
+      #partial switch input.mouse_button_pressed
       {
       case .LEFT:
         if item != nil
         {
-          #partial switch &d in item.data
+          #partial switch &f in item.form
           {
           case TextItem:
-            if .VERTICAL == d.scroll_type
+            if .VERTICAL == f.scroll_type
             {
               if .PREV == txt_item_dir
               {
@@ -222,18 +200,18 @@ process_window_list_input :: proc(
             {
               if .PREV == txt_item_dir
               {
-                scroll_text_item(&d, .PREV)
+                scroll_text_item(&f, .PREV)
               }
               else
               {
-                scroll_text_item(&d, .NEXT)
+                scroll_text_item(&f, .NEXT)
               }
             }
             break action
 
           case ButtonItem:
-            d.highlight = false
-            win._act_state = .BUTTON_DOWN
+            f.hovered = false
+            st.button_pressed_id = int(f.id)
             break action
           }
         }
@@ -257,6 +235,7 @@ process_window_list_input :: proc(
             )
           cursor.set_state(.RESIZE)
 
+          win._act_state = .RESIZE
           win._maximized = false
         }
         break action
@@ -295,13 +274,13 @@ process_window_list_input :: proc(
         break action
       }
 
-      if wheel_move != 0
+      if input.mouse_wheel_move != 0
       {
-        #partial switch &data in item.data
+        #partial switch &form in item.form
         {
         case TextItem:
-          txt_item := &item.data.(TextItem)
-          if wheel_move < 0
+          txt_item := &item.form.(TextItem)
+          if input.mouse_wheel_move < 0
           {
             scroll_text_item(txt_item, .NEXT)
           }
@@ -339,23 +318,23 @@ process_window_list_input :: proc(
         break windows
       }
       
-      scroll_counter = (scroll_counter + 1) % g_scroll_delay
+      scroll_counter = (scroll_counter + 1) % cfg.scroll_delay
       if scroll_counter != 0
       {
         break action
       }
 
-      item := get_item_under_mouse(win.item, mouse_pos)
+      item := get_sub_item_under_mouse(win.item, mouse_pos)
       if nil == item
       {
         win._act_state = .NONE
         break windows
       }
       txt_item: ^TextItem
-      #partial switch &d in item.data
+      #partial switch &f in item.form
       {
       case TextItem:
-        txt_item = &d
+        txt_item = &f
       }
       if nil == txt_item
       {
@@ -372,14 +351,6 @@ process_window_list_input :: proc(
         scroll_text_item(txt_item, .NEXT)
         cursor.set_state(.SCROLL_DOWN)
       }
-
-    case .BUTTON_DOWN:
-      if !rl.IsMouseButtonDown(.LEFT)
-      {
-        win._act_state = .NONE
-        break windows
-      }
-      break windows
     }
 
     new_top_index = (i != 0) ? i : -1
@@ -387,14 +358,14 @@ process_window_list_input :: proc(
   }
   if 0 < new_top_index
   {
-    move_window_index_to_index(list, uint(new_top_index), 0)
+    move_window_index_to_index(uint(new_top_index), 0)
   }
 }
 
-draw_window_list :: proc(list: []^Window)
+draw_window_list :: proc()
 {
   @(static) first_time := true
-  #reverse for win, i in list
+  #reverse for win, i in st.wlist
   {
     draw_window(win, 0 == i, .RESIZE == win._act_state || first_time)
   }
@@ -404,8 +375,16 @@ draw_window_list :: proc(list: []^Window)
   }
 }
 
+get_button_down_id :: #force_inline proc() -> int
+{
+  defer st.button_pressed_id = -1
+  return st.button_pressed_id
+}
+
 init :: proc(
   font         : rl.Font,
+
+  wlist        : []^Window      = {},
 
   pad          : f32            = 12,
   fg_color     :                = rl.BLACK,
@@ -419,20 +398,31 @@ init :: proc(
   frame_delay  :                = 1,
   scroll_delay :                = 1,
 ) {
-  g_font         = font
+  cfg.font        = font
 
-  g_pad          = pad
-  g_fg_color     = fg_color
-  g_bg           = bg
+  cfg.pad         = pad
+  cfg.fg_color      = fg_color
+  cfg.bg            = bg
 
-  g_win_shadow   = win_shadow
-  g_border       = border
-  g_line_thick   = line_thick
-  g_base_unit    = base_unit
+  cfg.win_shadow    = win_shadow
+  cfg.border        = border
+  cfg.line_thick    = line_thick
+  cfg.base_unit     = base_unit
 
-  g_frame_delay  = (frame_delay < 0) ? 1 : frame_delay
-  g_scroll_delay = (scroll_delay < 0) ? 1 : scroll_delay
+  cfg.frame_delay   = (frame_delay < 0) ? 1 : frame_delay
+  cfg.scroll_delay  = (scroll_delay < 0) ? 1 : scroll_delay
 
+  reserve(&st.wlist, len(wlist))
+  for win in wlist
+  {
+    add_window(win)
+  }
 
-  g_header_height = f32(g_font.baseSize) + math.trunc(g_pad / 2)
+  cfg.header_height = f32(cfg.font.baseSize) + math.trunc(cfg.pad / 2)
+}
+
+fini :: proc()
+{
+  delete(st.wlist)
+  rl.UnloadFont(cfg.font)
 }

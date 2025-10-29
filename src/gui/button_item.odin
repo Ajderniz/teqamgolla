@@ -1,22 +1,14 @@
 package gui
 
-import str "core:strings"
-
 import rl  "vendor:raylib"
-
-ButtonItem :: struct {
-  label     : string,
-  //icon  : ^rl.Texture,
-  highlight : bool,
-}
 
 @(private)
 draw_button_item :: proc(
   buti     : ButtonItem,
-  rec       : rl.Rectangle,
-  font      : rl.Font,
-  fg_color  : rl.Color,
-  bg        : ItemBackground,
+  rec      : rl.Rectangle,
+  font     : rl.Font,
+  fg_color : rl.Color,
+  bg       : ItemBackground,
   ) {
   draw_item_background(
     bg,

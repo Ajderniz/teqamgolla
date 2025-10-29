@@ -8,25 +8,35 @@
 
 package teqamgolla
 
-import     "core:log"
-import     "core:mem"
-import     "core:math"
-import str "core:strings"
+import      "core:log"
+import      "core:mem"
+import      "core:math"
+import      "core:os"
+import path "core:path/filepath"
+import str  "core:strings"
 
-import rl  "vendor:raylib"
+import rl   "vendor:raylib"
 
-import dgn "dungeon"
-import     "gui"
-import     "gui/cursor"
+import dgn  "dungeon"
+import      "gui"
+import      "gui/cursor"
+import inp  "input"
+
+ROOT_DIR  :: "/home/axell/Work/odin/teqamgolla"
 
 NAT_SCR_W :: 640
-NAT_SCR_H :: (NAT_SCR_W / 4) * 3
+NAT_SCR_H :: NAT_SCR_W * .75
 
-SCALE :: 2
-SCR_W :: NAT_SCR_W * SCALE
-SCR_H :: NAT_SCR_H * SCALE
+SCR_SCALE :: 2
+SCR_W :: NAT_SCR_W * SCR_SCALE
+SCR_H :: NAT_SCR_H * SCR_SCALE
 
-FPS   :: 20
+FPS   :: 60
+
+cfg: struct
+{
+  dir: [enum {RES, FONTS, IMG, MAPS}]string
+}
 
 main :: proc()
 {
@@ -59,6 +69,11 @@ main :: proc()
 
   /* ========================== INITIALIZATION ============================== */
 
+  cfg.dir[.RES]   = path.join({ROOT_DIR,      "res"})
+  cfg.dir[.FONTS] = path.join({cfg.dir[.RES], "fonts"})
+  cfg.dir[.IMG]   = path.join({cfg.dir[.RES], "img"})
+  cfg.dir[.MAPS]  = path.join({cfg.dir[.RES], "maps"})
+
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
   rl.SetTargetFPS(FPS)
 
@@ -69,64 +84,71 @@ main :: proc()
     )
   minimap_rtxr := rl.LoadRenderTexture(100, 100)
 
-  wall_txr := rl.LoadTexture("../res/img/wall.png")
-  rl.SetTextureFilter(wall_txr, .BILINEAR)
-  wall_east: dgn.Face = { base=wall_txr }
+  res_path: string
+  res_path_cstring: cstring
 
-  dum: dgn.Block
-  dum.faces[.TOP] = &wall_east
-  dum.faces[.NORTH] = &wall_east
-  dum.faces[.EAST] = &wall_east
-  dum.faces[.SOUTH] = &wall_east
-  dum.faces[.WEST] = &wall_east
-  dum.faces[.BOTTOM] = &wall_east
+  res_path = path.join({cfg.dir[.IMG], "cursor.png"})
+  res_path_cstring = str.clone_to_cstring(res_path)
+  delete(res_path)
+  cursor.init(res_path_cstring)
+  delete(res_path_cstring)
+  font: rl.Font
+  {
+    codepoint_count: i32
+    codepoints := rl.LoadCodepoints(
+      "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20!\"#$%&'()*+,-./0123456789:;<>=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}~\x7F\xA0¡¿ÁÉÍÑÓÚÜáéíñóúü\x00",
+      &codepoint_count)
 
-  bmap: dgn.BlockMap = {
-    {
-      { &dum, &dum, &dum, &dum },
-      { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
-    },
-    {
-      { &dum, &dum, &dum, &dum },
-      { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
-    },
-    {
-      { &dum, &dum, &dum, &dum },
-      { nil,  nil,  &dum, nil },
-      { nil,  nil,  nil,  nil },
-      { nil,  nil,  nil,  nil },
-    }
+    res_path = path.join({cfg.dir[.FONTS], "Px437_DOS-V_re_ANK16.ttf"})
+    res_path_cstring = str.clone_to_cstring(res_path)
+    delete(res_path)
+    font = rl.LoadFontEx(res_path_cstring, 16, codepoints, codepoint_count)
+    delete(res_path_cstring)
+
+    rl.UnloadCodepoints(codepoints)
   }
-  player: dgn.PlayerState = {pos={z=1}}
-  stretch: f32 = 2
-
-  cursor.init("../res/img/cursor.png")
-  font := rl.LoadFont("../res/fonts/Px437_DOS-V_re_ANK16.ttf")
-  gui.init(font)
-
   win1 := gui.Window {
     draggable = true,
     item = &gui.Item { 
-      data = gui.ImageItem {
-        texture = first_person_rtxr.texture,
-        is_rtxr = true
+      non_resizable = {true,true},
+      form = gui.BoxItem {
+        header = "FP",
+        content = {
+          &gui.Item {
+            form = gui.ImageItem {
+              texture = first_person_rtxr.texture,
+              is_rtxr = true,
+            }
+          },
+        }
       }
     }
   }
   win2 := gui.Window {
     draggable = true,
     item = &gui.Item { 
-      data = gui.ImageItem {
-        texture = minimap_rtxr.texture,
-        is_rtxr = true,
+      non_resizable = {true,true},
+      form = gui.BoxItem {
+        header = "MM",
+        content = {
+          &gui.Item {
+            form = gui.ImageItem {
+              texture = minimap_rtxr.texture,
+              is_rtxr = true
+            }
+          }
+        }
       }
     }
   }
-  wlist : []^gui.Window = { &win1, &win2 }
+  gui.init(font, wlist = {&win1, &win2}, base_unit = 8, frame_delay = 3)
+
+  dgn.init(cfg.dir[.MAPS], cfg.dir[.IMG])
+  if !dgn.load_block_map("test.json")
+  {
+    log.error("Could not load map")
+    os.exit(1)
+    }
 
   defer
   {
@@ -135,139 +157,38 @@ main :: proc()
     rl.UnloadRenderTexture(minimap_rtxr)
 
     cursor.fini()
+    gui.fini()
+    dgn.fini()
 
     rl.CloseWindow()
+
+    for dir in cfg.dir
+    {
+      delete(dir)
+    }
   }
 
-  dgn.update_first_person(bmap, player, first_person_rtxr, stretch)
-  dgn.update_minimap(5, bmap, player, minimap_rtxr)
+  dgn.update_first_person_rtxr(first_person_rtxr)
+  dgn.update_minimap_rtxr(minimap_rtxr, 5)
 
   /* ============================= MAIN LOOP ================================ */
 
   for !rl.WindowShouldClose()
   {
-    key_pressed := rl.GetKeyPressed()
-    old_player := player
-    old_stretch := stretch
-    #partial switch key_pressed
+    input := inp.get_input_state()
+    gui.process_input(input, NAT_SCR_W, NAT_SCR_H, SCR_SCALE)
+    
+    if dgn.process_input(input)
     {
-    case .W:
-      switch player.dir
-      {
-      case .NORTH: player.y -= (0        < player.y)              ? 1 : 0
-      case .EAST:  player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
-      case .SOUTH: player.y += (player.y < (len(bmap[0]) - 1))    ? 1 : 0
-      case .WEST:  player.x -= (0        < player.x)              ? 1 : 0
-      }
-    case .S:
-      switch player.dir
-      {
-      case .NORTH: player.y += (player.y < (len(bmap[0]) - 1))    ? 1 : 0
-      case .EAST:  player.x -= (0        < player.x)              ? 1 : 0
-      case .SOUTH: player.y -= (0        < player.y)              ? 1 : 0
-      case .WEST:  player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
-      }
-    case .A:
-      switch player.dir
-      {
-      case .NORTH: player.x -= (0        < player.x)              ? 1 : 0
-      case .EAST:  player.y -= (0        < player.y)              ? 1 : 0
-      case .SOUTH: player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
-      case .WEST:  player.y += (player.y < (len(bmap[0]) - 1 ))   ? 1 : 0
-      }
-    case .D:
-      switch player.dir
-      {
-      case .NORTH: player.x += (player.x < (len(bmap[0][0]) - 1)) ? 1 : 0
-      case .EAST:  player.y += (player.y < (len(bmap[0]) - 1 ))   ? 1 : 0
-      case .SOUTH: player.x -= (0        < player.x)              ? 1 : 0
-      case .WEST:  player.y -= (0        < player.y)              ? 1 : 0
-      }
-    case .Q:
-      switch player.dir
-      {
-      case .NORTH: player.dir = .WEST
-      case .EAST:  player.dir = .NORTH
-      case .SOUTH: player.dir = .EAST
-      case .WEST:  player.dir = .SOUTH
-      }
-    case .E:
-      switch player.dir
-      {
-      case .NORTH: player.dir = .EAST
-      case .EAST:  player.dir = .SOUTH
-      case .SOUTH: player.dir = .WEST
-      case .WEST:  player.dir = .NORTH
-      }
-    case .R:    player.z += (player.z < (len(bmap) - 1)) ? 1 : 0
-    case .F:    player.z -= (0        < player.z)        ? 1 : 0
-    case .UP:   stretch += 0.1
-    case .DOWN: stretch -= (0.1 < stretch) ? 0.1 : 0
+      dgn.update_first_person_rtxr(first_person_rtxr)
+      dgn.update_minimap_rtxr(minimap_rtxr, 5)
     }
-
-    must_update := false
-    #partial switch key_pressed
-    {
-    case .W, .S, .A, .D, .R, .F: must_update = (old_player.pos != player.pos)
-    case .Q, .E:                 must_update = (old_player.dir != player.dir)
-    case .UP, .DOWN:             must_update = (old_stretch    != stretch)
-    }
-    if must_update
-    {
-      dgn.update_first_person(bmap, player, first_person_rtxr, stretch)
-      dgn.update_minimap(5, bmap, player, minimap_rtxr)
-    }
-
-
-    gui.process_window_list_input(wlist, NAT_SCR_W, NAT_SCR_H, SCALE)
-
 
     rl.BeginTextureMode(rtxr)
     {
       rl.ClearBackground(rl.DARKBLUE)
-
-      /*
-      rl.DrawTexturePro(
-        first_person_rtxr.texture,
-        {
-          0,
-          0,
-          f32(first_person_rtxr.texture.width),
-          -f32(first_person_rtxr.texture.height),
-        },
-        {
-          (NAT_SCR_W - f32(first_person_rtxr.texture.width))  / 2,
-          (NAT_SCR_H - f32(first_person_rtxr.texture.height)) / 2,
-          f32(first_person_rtxr.texture.width),
-          f32(first_person_rtxr.texture.height),
-        },
-        0,
-        0,
-        rl.WHITE
-        )
-
-      rl.DrawTexturePro(
-        minimap_rtxr.texture,
-        {
-          0,
-          0,
-          f32(minimap_rtxr.texture.width),
-          -f32(minimap_rtxr.texture.height),
-        },
-        {
-          12,
-          12,
-          f32(minimap_rtxr.texture.width),
-          f32(minimap_rtxr.texture.height),
-        },
-        0,
-        0,
-        rl.WHITE
-        )
-      */
-
-      gui.draw_window_list(wlist)
-      cursor.draw(SCALE)
+      gui.draw_window_list()
+      cursor.draw(SCR_SCALE)
     }
     rl.EndTextureMode()
 

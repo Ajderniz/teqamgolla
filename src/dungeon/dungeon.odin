@@ -1,44 +1,31 @@
 package dungeon
 
-import    "core:log"
-import    "core:math"
+import      "core:encoding/json"
+import      "core:log"
+import      "core:os"
+import path "core:path/filepath"
+import str  "core:strings"
 
-import rl "vendor:raylib"
-import    "vendor:raylib/rlgl"
+import rl   "vendor:raylib"
+import      "vendor:raylib/rlgl"
 
-Vector3Int :: struct { x, y, z: int }
-Vector2Int :: struct { x, y: int }
-Move3      :: struct { side, forw, elev: int }
+import inp  "../input"
 
-Angle     :: enum { 
-  V0   = 0,
-  H90  = 90,
-  V180 = 180,
-  H270 = 270,
+MINIMAP_BLOCK_SIZE  :: 5
+PERSPECTIVE_STRETCH :: 2
+
+@(private)
+cfg: struct {
+  maps_dir : string,
+  img_dir  : string,
 }
 
-Direction :: enum {
-  NORTH = int(Angle.V0),
-  EAST  = int(Angle.H90),
-  SOUTH = int(Angle.V180),
-  WEST  = int(Angle.H270),
-}
-
-Face :: struct {
-  base : rl.Texture,
-  side : map[Angle][enum{LESSER, EQUAL, GREATER}]^rl.Texture
-}
-
-Block :: struct {
-  faces : [enum{TOP, NORTH, EAST, SOUTH, WEST, BOTTOM}]^Face
-}
-
-BlockMap :: [][][]^Block
-@(private) BlockFOV :: [3][5][5]^Block
-
-PlayerState :: struct {
-  using pos: Vector3Int,
-  dir: Direction,
+@(private)
+st: struct {
+  faces  : map[string]Face,
+  blocks : map[string]Block,
+  bmap   : BlockMap,
+  player : PlayerState,
 }
 
 @(private)
@@ -70,621 +57,555 @@ draw_texture_skewed :: proc(
   rlgl.SetTexture(0)
 }
 
-@(private) BlockDrawOptions :: bit_set[enum{ FRONT, SIDE_V, SIDE_H }]
 @(private)
-draw_block_at_fov_position :: proc(
-  block     : Block,
-  dir       : Direction,
-
-  pos       : Move3,
-  options   : BlockDrawOptions,
-
-  scr_size  : rl.Vector2,
-  zero_size : rl.Vector2,
-  stretch   : f32
-  )
+free_block_map :: proc()
 {
-  if pos == { 0, 0 ,0 }
+  for layer in st.bmap
   {
-    return
-  }
-
-  near_size := rl.Vector2 {
-      math.trunc(zero_size.x / math.pow(stretch, f32(pos.forw))),
-      math.trunc(zero_size.y / math.pow(stretch, f32(pos.forw))),
-  }
-  near_pos := rl.Vector2 {
-    // Origin                                  +  Offset
-    math.trunc((scr_size.x - near_size.x) / 2) + (near_size.x * f32(pos.side)),
-    math.trunc((scr_size.y - near_size.y) / 2) + (near_size.y * f32(pos.elev))
-  }
-
-  color := rl.WHITE
-  if 0 < pos.forw || pos.side != 0
-  {
-    color.r /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
-    color.g /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
-    color.b /= u8(math.abs(pos.side) + pos.forw + math.abs(pos.elev))
-  }
-
-  face: ^Face
-
-  if .FRONT in options
-  {
-    switch dir
+    for row in layer
     {
-    case .NORTH: face = block.faces[.SOUTH]
-    case .EAST:  face = block.faces[.WEST]
-    case .SOUTH: face = block.faces[.NORTH]
-    case .WEST:  face = block.faces[.EAST]
+      delete(row)
     }
-    if face != nil && rl.IsTextureValid(face.base)
-    {
-      rl.DrawTexturePro(
-        face.base,
-        { 0, 0, f32(face.base.width), f32(face.base.height) },
-        { near_pos.x, near_pos.y, near_size.x, near_size.y },
-        { 0, 0 },
-        0,
-        color
-        )
-    }
-    else
-    {
-      rl.DrawRectangleLinesEx(
-        {
-          near_pos.x,
-          near_pos.y,
-          near_size.x,
-          near_size.y,
-        },
-        1,
-        color
-        )
-    }
+    delete(layer)
   }
-
-  side_faces:
-  {
-    if 0 == pos.side && 0 == pos.elev
-    {
-      break side_faces
-    }
-
-    far_size := rl.Vector2 {
-        math.trunc(near_size.x / stretch),
-        math.trunc(near_size.y / stretch) 
-    }
-    far_pos: rl.Vector2 = {
-      // Origin                                 +  Offset
-      math.trunc((scr_size.x - far_size.x) / 2) + (far_size.x * f32(pos.side)),
-      math.trunc((scr_size.y - far_size.y) / 2) + (far_size.y * f32(pos.elev))
-    }
-    near_edg := rl.Vector2 { near_pos.x + near_size.x, near_pos.y + near_size.y}
-    far_edg  := rl.Vector2 { far_pos.x  + far_size.x,   far_pos.y + far_size.y }
-
-    points := make([^]rl.Vector2, 4)
-    defer free(points)
-
-    txr: ^rl.Texture
-
-    if pos.side != 0 && .SIDE_V in options
-    {
-      rotation: f32
-      face = nil
-
-      points[0].y = near_pos.y
-      points[1].y = far_pos.y
-      points[2].y = far_edg.y
-      points[3].y = near_edg.y
-
-      if pos.side < 0
-      {
-        points[0].x = near_edg.x
-        points[1].x = far_edg.x
-        points[2].x = far_edg.x
-        points[3].x = near_edg.x
-
-        switch dir
-        {
-        case .NORTH: face = block.faces[.EAST]
-        case .EAST:  face = block.faces[.SOUTH]
-        case .SOUTH: face = block.faces[.WEST]
-        case .WEST:  face = block.faces[.NORTH]
-        }
-        if face != nil
-        {
-          set := face.side[.H270]
-          switch pos.elev
-          {
-          case -1: txr = set[.GREATER]
-          case  1: txr = set[.LESSER]
-          case:    txr = set[.EQUAL]
-          }
-        }
-        rotation = 90
-      }
-      else
-      {
-        points[0].x = near_pos.x
-        points[1].x = far_pos.x
-        points[2].x = far_pos.x
-        points[3].x = near_pos.x
-
-        switch dir
-        {
-        case .NORTH: face = block.faces[.WEST]
-        case .EAST:  face = block.faces[.NORTH]
-        case .SOUTH: face = block.faces[.EAST]
-        case .WEST:  face = block.faces[.SOUTH]
-        }
-        if face != nil
-        {
-          set := face.side[.H90]
-          switch pos.elev
-          {
-          case -1: txr = set[.LESSER]
-          case  1: txr = set[.GREATER]
-          case:    txr = set[.EQUAL]
-          }
-        }
-        rotation = 270
-      }
-      if face != nil
-      {
-        if txr != nil && rl.IsTextureValid(txr^)
-        {
-          center := rl.Vector2 { f32(txr.width / 2), f32(txr.height / 2) }
-          rl.DrawTexturePro(
-            txr^,
-            { 0, 0, f32(txr.width), f32(txr.height) },
-            { 
-              (min(points[0].x, points[1].x) + center.x),
-              (min(points[0].y, points[1].y) + center.y),
-              abs(points[0].x - points[1].x),
-              (points[3].y - points[0].y)
-            },
-            center,
-            rotation,
-            color)
-        }
-        else if rl.IsTextureValid(face.base)
-        {
-          tl, bl, br, tr: rl.Vector2
-          if points[0].x < points[1].x
-          {
-            tl = points[0]
-            bl = points[3]
-            br = points[2]
-            tr = points[1]
-          }
-          else
-          {
-            tl = points[1]
-            bl = points[2]
-            br = points[3]
-            tr = points[0]
-          }
-          draw_texture_skewed(face.base, tl, bl, br, tr, Angle.V0, color)
-        }
-      }
-      else
-      {
-        rl.DrawLineStrip(points, 4, color)
-      }
-    }
-
-    if pos.elev != 0 && .SIDE_H in options
-    {
-      surf_color := color
-      angle: Angle
-      face = nil
-
-      points[0].x = near_pos.x
-      points[1].x = far_pos.x
-      points[2].x = far_edg.x
-      points[3].x = near_edg.x
-
-      if pos.elev < 0
-      {
-        points[0].y = near_edg.y
-        points[1].y = far_edg.y
-        points[2].y = far_edg.y
-        points[3].y = near_edg.y
-
-        face = block.faces[.BOTTOM]
-
-        surf_color.r = (50 <= surf_color.r) ? surf_color.r - 50 : 0
-        surf_color.g = (50 <= surf_color.g) ? surf_color.g - 50 : 0
-        surf_color.b = (50 <= surf_color.b) ? surf_color.b - 50 : 0
-      }
-      else
-      {
-        points[0].y = near_pos.y
-        points[1].y = far_pos.y
-        points[2].y = far_pos.y
-        points[3].y = near_pos.y
-
-        face = block.faces[.TOP]
-
-        surf_color.r = (surf_color.r < 255) ? surf_color.r + 50 : 255
-        surf_color.g = (surf_color.g < 255) ? surf_color.g + 50 : 255
-        surf_color.b = (surf_color.b < 255) ? surf_color.b + 50 : 255
-      }
-
-      if face != nil
-      {
-        switch dir
-        {
-        case .NORTH: angle = .V0
-        case .EAST:  angle = .H270
-        case .SOUTH: angle = .V180
-        case .WEST:  angle = .H90
-        }
-        {
-          set := face.side[angle]
-          switch pos.side
-          {
-          case -1: txr = set[.LESSER]
-          case  1: txr = set[.GREATER]
-          case:    txr = set[.EQUAL]
-          }
-        }
-        if txr != nil && rl.IsTextureValid(txr^)
-        {
-          rl.DrawTexturePro(
-            txr^,
-            { 0, 0, f32(txr.width), f32(txr.height) },
-            { 
-              min(points[0].x, points[1].x),
-              min(points[0].y, points[1].y),
-              points[3].x - points[0].x,
-              abs(points[0].y - points[1].y)
-            },
-            { 0, 0 },
-            0,
-            surf_color)
-        }
-        else
-        {
-          tl, bl, br, tr: rl.Vector2
-          if points[0].y < points[1].y
-          {
-            tl = points[0]
-            bl = points[1]
-            br = points[2]
-            tr = points[3]
-          }
-          else
-          {
-            tl = points[1]
-            bl = points[0]
-            br = points[3]
-            tr = points[2]
-          }
-          draw_texture_skewed(face.base, tl, bl, br, tr, angle, surf_color)
-        }
-      }
-      else
-      {
-        rl.DrawLineStrip(points, 4, surf_color)
-      }
-    }
-  }
+  delete(st.bmap)
 }
 
-@(private)
-is_block_visible :: proc(dst: Move3, fov: BlockFOV)-> bool
+
+set_player_state :: #force_inline proc(player: PlayerState)
 {
-  dif_side := dst.side
-  inc_side := 1
-  if dst.side < 0
-  {
-    dif_side = -dif_side
-    inc_side = -1
-  }
-  err_side := (2 * dif_side) - dst.forw
+  st.player = player
+}
 
-  dif_elev := dst.elev
-  inc_elev := 1
-  if dst.elev < 0
-  {
-    dif_elev = -dif_elev
-    inc_elev = -1
-  }
-  err_elev := (2 * dif_elev) - dst.forw
+get_player_state :: #force_inline proc() -> PlayerState
+{
+  return st.player
+}
 
-  side, elev := 0, 0
-  for forw in 0..<(dst.forw+1)
+process_input :: proc(input: inp.InputState) -> (changed: bool)
+{
+  if len(st.bmap) <= 0
   {
-    if side == dst.side && forw == dst.forw && elev == dst.elev
+    return false
+  }
+
+  player  := st.player
+
+  #partial switch input.key_pressed
+  {
+  case .W:
+    switch player.dir
     {
-      break
+    case .NORTH: player.y -= (0        < player.y)                 ? 1 : 0
+    case .EAST:  player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
+    case .SOUTH: player.y += (player.y < (len(st.bmap[0]) - 1))    ? 1 : 0
+    case .WEST:  player.x -= (0        < player.x)                 ? 1 : 0
     }
-    if fov[elev + (len(fov)/2)][forw][side + (len(fov[0][0])/2)] != nil
+  case .S:
+    switch player.dir
     {
+    case .NORTH: player.y += (player.y < (len(st.bmap[0]) - 1))    ? 1 : 0
+    case .EAST:  player.x -= (0        < player.x)                 ? 1 : 0
+    case .SOUTH: player.y -= (0        < player.y)                 ? 1 : 0
+    case .WEST:  player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
+    }
+  case .A:
+    switch player.dir
+    {
+    case .NORTH: player.x -= (0        < player.x)                 ? 1 : 0
+    case .EAST:  player.y -= (0        < player.y)                 ? 1 : 0
+    case .SOUTH: player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
+    case .WEST:  player.y += (player.y < (len(st.bmap[0]) - 1 ))   ? 1 : 0
+    }
+  case .D:
+    switch player.dir
+    {
+    case .NORTH: player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
+    case .EAST:  player.y += (player.y < (len(st.bmap[0]) - 1 ))   ? 1 : 0
+    case .SOUTH: player.x -= (0        < player.x)                 ? 1 : 0
+    case .WEST:  player.y -= (0        < player.y)                 ? 1 : 0
+    }
+  case .Q:
+    switch player.dir
+    {
+    case .NORTH: player.dir = .WEST
+    case .EAST:  player.dir = .NORTH
+    case .SOUTH: player.dir = .EAST
+    case .WEST:  player.dir = .SOUTH
+    }
+  case .E:
+    switch player.dir
+    {
+    case .NORTH: player.dir = .EAST
+    case .EAST:  player.dir = .SOUTH
+    case .SOUTH: player.dir = .WEST
+    case .WEST:  player.dir = .NORTH
+    }
+  case .R:    player.z += (player.z < (len(st.bmap) - 1)) ? 1 : 0
+  case .F:    player.z -= (0        < player.z)           ? 1 : 0
+  }
+
+  if st.player != player
+  {
+    st.player  = player
+    return true
+  }
+  return false
+}
+
+load_block_map :: proc(bmap_filename: string) -> (success: bool)
+{
+  path_string:  string
+  path_cstring: cstring
+
+  path_string = path.join({cfg.maps_dir, bmap_filename}) 
+  data: []byte
+  {
+    ok: bool
+    data, ok = os.read_entire_file_from_filename(path_string)
+    delete(path_string)
+    if !ok
+    {
+      log.errorf("Could not open map file '%v'", bmap_filename)
+      return false
+    }
+  }
+
+  is_value_type :: proc(
+    val: json.Value,
+    exp: enum { NULL, INTEGER, FLOAT, BOOLEAN, STRING, ARRAY, OBJECT }) -> bool
+  {
+    #partial switch type in val
+    {
+    case json.Null:    return exp == .NULL
+    case json.Integer: return exp == .INTEGER
+    case json.Float:   return exp == .FLOAT
+    case json.Boolean: return exp == .BOOLEAN
+    case json.String:  return exp == .STRING
+    case json.Array:   return exp == .ARRAY
+    case json.Object:  return exp == .OBJECT
+    }
+    return false
+  }
+
+  root_val: json.Value
+  root_obj: json.Object
+  {
+    err: json.Error
+    root_val, err = json.parse(data, parse_integers = true)
+    if err != .None
+    {
+      log.errorf("'%v': could not parse map JSON", bmap_filename)
+      return false
+    }
+    delete(data)
+
+    if !is_value_type(root_val, .OBJECT)
+    {
+      log.errorf("'%v': root not an object", bmap_filename)
+      return false
+    }
+    root_obj = root_val.(json.Object)
+  }
+  defer json.destroy_value(root_val)
+
+  width, length, depth: int
+  {
+    dims_val, exists := root_obj["dimensions"]
+    if !exists
+    {
+      log.errorf("'%v': 'dimensions' field not found", bmap_filename)
+      return false
+    }
+    if !is_value_type(dims_val, .OBJECT)
+    {
+      log.errorf("'%v': 'dimensions' field not an object", bmap_filename)
+      return false
+    }
+    dims_obj := dims_val.(json.Object)
+
+    for dim_key, dim_val in dims_obj
+    {
+      dim_ptr: ^int
+      switch dim_key
+      {
+      case "width":  dim_ptr = &width
+      case "length": dim_ptr = &length
+      case "depth":  dim_ptr = &depth
+      case:
+        log.errorf("'%v':'dimensions': '%v' is not a valid dimension",
+          bmap_filename, dim_key)
+        continue
+      }
+      if !is_value_type(dim_val, .INTEGER)
+      {
+        log.errorf("'%v':'dimensions':'%v': not an integer",
+          bmap_filename, dim_key)
+        continue
+      }
+      dim_ptr^ = int(dim_val.(json.Integer))
+    }
+    if width <= 0 || length <= 0 || depth <= 0
+    {
+      log.errorf("'%v':'dimensions': one or more dimensions invalid",
+        bmap_filename)
+      return false
+    }
+  }
+
+  res_obj: json.Object
+  load_res_obj:
+  {
+    res_val, exists := root_obj["resources"]
+    if !exists
+    {
+      log.warnf("'%v': 'resources' field not found", bmap_filename)
+    }
+    if !is_value_type(res_val, .OBJECT)
+    {
+      log.errorf("'%v':'resources': not an object")
+      break load_res_obj
+    }
+    res_obj = res_val.(json.Object) 
+  }
+
+  faces_obj: json.Object
+  load_faces_obj:
+  {
+    faces_val, exists := res_obj["faces"]
+    if !exists
+    {
+      log.warnf("'%v':'resources': 'faces' field not found", bmap_filename)
+    }
+    if !is_value_type(faces_val, .OBJECT)
+    {
+      log.errorf("'%v':'resources':'faces': not an object")
+      break load_faces_obj
+    }
+    faces_obj = faces_val.(json.Object)
+  }
+
+  read_faces:
+  for face_key, face_val in faces_obj
+  {
+    face: Face
+
+    if !is_value_type(face_val, .OBJECT)
+    {
+      log.errorf("'%v':'resources':'faces':'%v': not an object",
+        bmap_filename, face_key)
+      continue read_faces
+    }
+    face_obj := face_val.(json.Object)
+
+    read_base:
+    {
+      base_val, exists := face_obj["base"]
+      if !exists
+      {
+        log.errorf("'%v':'resources':'faces':'%v': 'base' field not found",
+          bmap_filename, face_key)
+        continue read_faces
+      }
+      if !is_value_type(base_val, .STRING)
+      {
+        log.errorf("'%v':'resources':'faces':'%v':'base': not a string",
+          bmap_filename, face_key)
+        continue read_faces
+      }
+
+      base_string := base_val.(json.String)
+
+      path_string = path.join({cfg.img_dir, base_string})
+      path_cstring = str.clone_to_cstring(path_string)
+      delete(path_string)
+      face.base = rl.LoadTexture(path_cstring)
+      delete(path_cstring)
+      if !rl.IsTextureValid(face.base)
+      {
+        log.errorf(
+          "'%v':'resources':'faces':'%v':'base': error loading texture",
+          bmap_filename, face_key)
+        continue read_faces
+      }
+    }
+
+    read_side:
+    {
+      side_val, exists := face_obj["side"]
+      if !exists
+      {
+        log.infof("'%v':'resources':'faces':'%v': 'side' field not found",
+          bmap_filename, face_key)
+        break read_side
+      }
+      if !is_value_type(side_val, .OBJECT)
+      {
+        log.errorf("'%v':...:'%v':'side': not an object",
+          bmap_filename, face_key)
+        break read_side
+      }
+
+      read_angles:
+      for angle_key, angle_val in side_val.(json.Object)
+      {
+        angle_index: Angle
+        switch angle_key
+        {
+        case "v0":   angle_index = .V0
+        case "h90":  angle_index = .H90
+        case "v180": angle_index = .V180
+        case "h270": angle_index = .H270
+        case:
+          log.errorf("'%v':...:'%v':'side': '%v' is not a valid angle key",
+            bmap_filename, face_key, angle_key)
+          continue read_angles
+        }
+        if !is_value_type(angle_val, .OBJECT)
+        {
+          log.errorf("'%v':...:'%v':'side':'%v': not an object",
+            bmap_filename, face_key, angle_key)
+          continue read_angles
+        }
+
+        read_pos:
+        for pos_key, pos_val in angle_val.(json.Object)
+        {
+          pos_index: SideAnglePosition
+          switch pos_key
+          {
+          case "lesser":  pos_index = .LESSER
+          case "equal":   pos_index = .EQUAL
+          case "greater": pos_index = .GREATER
+          case:
+            log.errorf(
+              "'%v':...:'%v':'side':'%v': '%v' is not a valid position key",
+              bmap_filename, face_key, angle_key, pos_key)
+            continue read_pos
+          }
+          if !is_value_type(pos_val, .STRING)
+          {
+            log.errorf("'%v':...:'%v':'side':'%v':'%v': not a string",
+              bmap_filename, face_key, angle_index, pos_key)
+            continue read_pos
+          }
+
+          txr, err := new(rl.Texture)
+          if err != .None
+          {
+            log.errorf(
+              "'%v':...:'%v':'side':'%v':'%v': could not allocate texture",
+              bmap_filename, face_key, angle_index, pos_index)
+            continue read_pos
+          }
+          path_string = path.join({cfg.img_dir, pos_val.(json.String)})
+          path_cstring = str.clone_to_cstring(path_string)
+          delete(path_string)
+          txr^ = rl.LoadTexture(path_cstring)
+          delete(path_cstring)
+          if !rl.IsTextureValid(txr^)
+          {
+            log.errorf(
+              "'%v':...:'%v':'side':'%v':'%v': could not load texture",
+              bmap_filename, face_key, angle_index, pos_index)
+            free(txr)
+            continue read_pos
+          }
+
+          face.side[angle_index][pos_index] = txr
+        }
+      }
+    }
+    st.faces[face_key] = face
+  }
+
+  blocks_obj: json.Object
+  load_blocks_obj:
+  {
+    blocks_val, exists := res_obj["blocks"]
+    if !exists
+    {
+      log.errorf("'%v':'resources': 'blocks' field not found", bmap_filename)
+      break load_blocks_obj
+    }
+    if !is_value_type(blocks_val, .OBJECT)
+    {
+      log.errorf("'%v':'resources':'blocks': not an object", bmap_filename)
+      break load_blocks_obj
+    }
+    blocks_obj = blocks_val.(json.Object)
+  }
+
+  read_blocks:
+  for block_key, block_val in blocks_obj
+  {
+    block: Block
+
+    if !is_value_type(block_val, .OBJECT)
+    {
+      log.errorf("'%v':'resources':'blocks':'%v': not an object",
+        bmap_filename, block_key)
+      continue read_blocks
+    }
+
+    read_fdirs:
+    for fdir_key, face_key_val in block_val.(json.Object)
+    {
+      fdir_index: FaceDirection
+      switch fdir_key
+      {
+      case "top":    fdir_index = .TOP
+      case "north":  fdir_index = .NORTH
+      case "east":   fdir_index = .EAST
+      case "south":  fdir_index = .SOUTH
+      case "west":   fdir_index = .WEST
+      case "bottom": fdir_index = .BOTTOM
+      case:
+        log.errorf("'%v':...:'%v': '%v' is not a valid face direction key",
+          bmap_filename, block_key, fdir_key)
+        continue read_fdirs
+      }
+      if !is_value_type(face_key_val, .STRING)
+      {
+        log.errorf("'%v':...:'%v':'%v': not a string",
+          bmap_filename, block_key, fdir_key)
+        continue read_fdirs
+      }
+      exists: bool
+      block.faces[fdir_index], exists = &st.faces[face_key_val.(json.String)]
+      if !exists
+      {
+        log.errorf("'%v':...'%v':'%v': not in memory",
+          bmap_filename, block_key, fdir_key)
+        continue read_fdirs
+      }
+    }
+
+    st.blocks[block_key] = block
+  }
+
+  read_layout:
+  {
+    free_block_map()
+
+    layout_val, exists := root_obj["layout"]
+    if !exists
+    {
+      log.errorf("'%v': 'layout' field not found")
+      return false
+    }
+    if !is_value_type(layout_val, .ARRAY)
+    {
+      log.errorf("'%v':'layout': not an array")
       return false
     }
 
-    if 0 < err_side
+    layout_arr := layout_val.(json.Array)
+    st.bmap = make(BlockMap, depth)
+
+    actual_depth := len(layout_arr)
+    if actual_depth != depth
     {
-      side     += inc_side
-      err_side += 2 * (dif_side - dst.forw)
-    }
-    else
-    {
-      err_side += 2 * dif_side
+      log.warnf("'%v':'layout': 'depth' does not match", bmap_filename)
     }
 
-    if 0 < err_elev
+    z_limit := min(depth, actual_depth)
+    for z := 0; z < z_limit; z += 1
     {
-      elev     += inc_elev
-      err_elev += 2 * (dif_elev - dst.forw)
-    }
-    else
-    {
-      err_elev += 2 * dif_elev
+      if !is_value_type(layout_arr[z], .ARRAY)
+      {
+        log.errorf("'%v':'layout':%v: not an aray", bmap_filename, z)
+        free_block_map()
+        return false
+      }
+
+      layer_arr := layout_arr[z].(json.Array)
+      st.bmap[z] = make([][]^Block, length)
+
+      actual_length := len(layer_arr)
+      if actual_length != length
+      {
+        log.warnf("'%v':'layout':%v: length does not match", bmap_filename, z)
+      }
+
+      y_limit := min(length, actual_length)
+      for y := 0; y < y_limit; y += 1
+      {
+        if !is_value_type(layer_arr[y], .ARRAY)
+        {
+          log.errorf("'%v':'layout':%v:%v: not an array", bmap_filename, z, y)
+          free_block_map()
+          return false
+        }
+
+        row_arr := layer_arr[y].(json.Array)
+        st.bmap[z][y] = make([]^Block, width)
+
+        actual_width := len(row_arr)
+        if actual_width != width
+        {
+          log.warnf("'%v':'layout':%v:%v: width does not match",
+            bmap_filename, z, y)
+        }
+
+        x_limit := min(width, actual_width)
+        row_loop:
+        for x := 0; x < x_limit; x += 1
+        {
+          block_key_val := row_arr[x]
+
+          if is_value_type(block_key_val, .NULL)
+          {
+            continue row_loop
+          }
+          if !is_value_type(block_key_val, .STRING)
+          {
+            log.errorf("'%v':'layout':%v:%v:%v: not a string",
+              bmap_filename, z, y, x)
+            free_block_map()
+            return false
+          }
+
+          block_key_string := block_key_val.(json.String)
+          block_ptr, exists := &st.blocks[block_key_string]
+          if !exists
+          {
+            log.errorf("'%v':'layout':%v:%v:%v: '%v' not in memory",
+              bmap_filename, z, y, x, block_key_string)
+            continue row_loop
+          }
+
+          st.bmap[z][y][x] = block_ptr
+        }
+      }
     }
   }
   return true
 }
 
-update_first_person :: proc(
-  bmap    : BlockMap,
-  player  : PlayerState,
-  rtxr    : rl.RenderTexture,
-  stretch : f32
-  )
+init :: proc(maps_dir, img_dir: string)
 {
-  fov: BlockFOV
-  build_fov:
-  {
-    pos := player.pos
-    dir := player.dir
-
-    elev := -(len(fov) / 2)
-    for &layer in fov
-    {
-      defer elev += 1
-
-      z := pos.z + elev
-      if z < 0 || len(bmap) <= z
-      {
-        continue
-      }
-      for &row, forw in layer
-      {
-        x, y: int
-
-        switch dir
-        {
-        case .NORTH: y = pos.y - forw
-        case .EAST:  x = pos.x + forw
-        case .SOUTH: y = pos.y + forw
-        case .WEST:  x = pos.x - forw
-        }
-        if y < 0 || len(bmap[0]) <= y || x < 0 || len(bmap[0][0]) <= x
-        {
-          continue
-        }
-
-        side := -(len(row) / 2)
-        for &block in row
-        {
-          defer side += 1
-
-          switch dir
-          {
-          case .NORTH: x = pos.x + side
-          case .EAST:  y = pos.y + side
-          case .SOUTH: x = pos.x - side
-          case .WEST:  y = pos.y - side
-          }
-
-          if y < 0 || len(bmap[0]) <= y || x < 0 || len(bmap[0][0]) <= x
-          {
-            continue
-          }
-
-          block = bmap[z][y][x]
-        }
-      }
-    }
-  }
-
-
-  rl.BeginTextureMode(rtxr)
-  {
-    rl.ClearBackground(rl.BLACK)
-
-    zero_size := rl.Vector2 {
-      f32(rtxr.texture.width)  * 1.5,
-      f32(rtxr.texture.height) * 1.5
-    }
-
-    draw_layer :: proc(
-      fov       : BlockFOV,
-      elev, z   : int,
-      rtxr_size : rl.Vector2,
-      zero_size : rl.Vector2,
-      dir       : Direction,
-      stretch   : f32,
-      )
-    {
-      layer := fov[z]
-
-      #reverse for row, forw in layer
-      {
-        side := -(len(row) / 2)
-        for block, x in row
-        {
-          defer side += 1
-
-          if nil == block
-          {
-            continue
-          }
-          if 2 <= forw && (elev < -1 || 1 < elev) && 
-             !is_block_visible({side, forw, elev}, fov)
-          {
-            continue
-          }
-
-          options: BlockDrawOptions
-
-          if side < 0
-          {
-            options += (nil == row[x+1]) ? { .SIDE_V } : options
-          }
-          else if 0 < side
-          {
-            options += (nil == row[x-1]) ? { .SIDE_V } : options
-          }
-
-          if 0 < forw
-          {
-            options += (nil == layer[forw-1][x]) ? { .FRONT } : options
-          }
-
-          // Remember that for Z (just in this case), lower is higher
-          if elev < 0
-          {
-            options += (nil == fov[z+1][forw][x]) ? {.SIDE_H } : options
-          }
-          else if 0 < elev
-          {
-            options += (nil == fov[z-1][forw][x]) ? {.SIDE_H } : options
-          }
-
-          draw_block_at_fov_position(
-            block^,
-            dir,
-            { side, forw, -elev },
-            options,
-            rtxr_size,
-            zero_size,
-            stretch
-            )
-        }
-      }
-    }
-
-    elev := -(len(fov) / 2)
-    for layer, z in fov
-    {
-      defer elev += 1
-
-      if 0 == elev
-      {
-        continue
-      }
-
-      draw_layer(
-        fov,
-        elev,
-        z,
-        {f32(rtxr.texture.width), f32(rtxr.texture.height)},
-        zero_size,
-        player.dir,
-        stretch)
-    }
-    draw_layer(
-      fov,
-      0,
-      len(fov)/2,
-      {f32(rtxr.texture.width), f32(rtxr.texture.height)},
-      zero_size,
-      player.dir,
-      stretch)
-  }
-  rl.EndTextureMode()
+  cfg.maps_dir = maps_dir
+  cfg.img_dir  = img_dir
 }
 
-update_minimap :: proc(
-  mm_size : int,
-  bmap    : BlockMap,
-  player  : PlayerState,
-  rtxr    : rl.RenderTexture
-  )
+fini :: proc()
 {
-  block_size := f32(min(rtxr.texture.width, rtxr.texture.height) / i32(mm_size))
-  half_mm_size := mm_size / 2
+  free_block_map()
 
-  rl.BeginTextureMode(rtxr)
+  delete(st.blocks)
+
+  for key, &face in st.faces
   {
-    rl.ClearBackground(rl.DARKPURPLE)
-
-    color := rl.ORANGE
-    color_step : u8 : 25
+    rl.UnloadTexture(face.base)
+    for angle in face.side
     {
-      sub := u8(player.z + 1) * color_step
-      color.r = (sub <= color.r) ? color.r - sub : 0
-      color.g = (sub <= color.g) ? color.g - sub : 0
-      color.b = (sub <= color.b) ? color.b - sub : 0
-    }
-    for bz := 0; bz <= player.z; bz += 1
-    {
-      by := player.y - half_mm_size
-      for y := 0; y <= mm_size; y += 1
+      for disp in angle
       {
-        defer by += 1
-
-        if by < 0 || (player.y + half_mm_size) < by || len(bmap[bz]) <= by
-        {
-          continue
-        }
-
-        bx := player.x - half_mm_size
-        for x := 0; x <= mm_size; x += 1
-        {
-          defer bx += 1
-
-          if bx < 0 || (player.x + half_mm_size) < bx || len(bmap[bz][by])<=bx||
-             nil == bmap[bz][by][bx] {//||
-             //(bz < player.z && bmap[bz+1][by][bx] != nil)
-          //{
-            continue
-          }
-
-          rl.DrawRectangleRec(
-            { f32(x) * block_size, f32(y) * block_size, block_size, block_size},
-            color)
-        }
-      }
-      {
-        limit :: 255 - color_step
-        color.r = (color.r <= limit) ? color.r + color_step : 255
-        color.g = (color.g <= limit) ? color.g + color_step : 255
-        color.b = (color.b <= limit) ? color.b + color_step : 255
+        //rl.UnloadTexture(disp^)
+        free(disp)
       }
     }
-
-    half_block_size := block_size / 2
-    pos : rl.Vector2 = f32(half_mm_size) * block_size
-    edg := rl.Vector2 { pos.x + block_size, pos.y + block_size }
-
-    points := make([^]rl.Vector2, 3)
-    defer free(points)
-    switch player.dir
-    {
-    case .NORTH:
-      points[0] = { pos.x + half_block_size, pos.y }
-      points[1] = { pos.x, edg.y }
-      points[2] = { edg.x, edg.y }
-    case .EAST:
-      points[0] = { pos.x, pos.y }
-      points[1] = { pos.x, edg.y }
-      points[2] = { edg.x, pos.y + half_block_size }
-    case .SOUTH:
-      points[0] = { pos.x, pos.y }
-      points[1] = { pos.x + half_block_size, edg.y }
-      points[2] = { edg.x, pos.y }
-    case .WEST:
-      points[0] = { pos.x, pos.y + half_block_size }
-      points[1] = { edg.x, edg.y }
-      points[2] = { edg.x, pos.y } 
-    }
-    rl.DrawTriangleStrip(points, 3, rl.RED)
   }
-  rl.EndTextureMode()
+  delete(st.faces)
 }

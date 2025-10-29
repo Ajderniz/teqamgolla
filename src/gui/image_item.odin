@@ -2,12 +2,6 @@ package gui
 
 import rl "vendor:raylib"
 
-ImageItem :: struct {
-  texture : rl.Texture,
-  resize  : enum { NONE, CENTER, STRETCH },
-  is_rtxr : bool,
-}
-
 @(private)
 draw_image_item :: proc(imgi: ImageItem, rec: rl.Rectangle)
 {

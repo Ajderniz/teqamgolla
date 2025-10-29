@@ -1,0 +1,44 @@
+{
+  "dimensions": {
+    "width": 4,
+    "length": 4,
+    "depth": 3
+  },
+  "resources": {
+    "faces": {
+      "wall": { 
+        "base": "wall.png",
+      }
+    },
+    "blocks": {
+      "wall": {
+        "top": "wall",
+        "north": "wall",
+        "east": "wall",
+        "south": "wall",
+        "west": "wall",
+        "bottom": "wall"
+      }
+    }
+  },
+  "layout": [
+    [
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"]
+    ],
+    [
+      ["wall", "wall", "wall", "wall"],
+      ["wall", null, null, "wall"],
+      ["wall", null, null, "wall"],
+      ["wall", "wall", "wall", "wall"]
+    ],
+    [
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"],
+      ["wall", "wall", "wall", "wall"]
+    ]
+  ]
+}

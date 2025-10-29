@@ -6,12 +6,6 @@ import    "core:sort"
 
 import rl "vendor:raylib"
 
-BoxItem :: struct {
-  header   : string,
-  content  : []^Item,
-  layout   : enum{ VERTICAL, HORIZONTAL },
-}
-
 @(private)
 update_box_item_content_sizes :: proc(
   boxi      : ^BoxItem,
@@ -32,7 +26,7 @@ update_box_item_content_sizes :: proc(
     for bi, i in boxi.content
     {
       size := (.VERTICAL == boxi.layout) ? bi.min_size.y : bi.min_size.x
-      switch d in bi.data
+      switch f in bi.form
       {
       case TextItem, ImageItem, ButtonItem:
         size += p_pad
@@ -67,7 +61,7 @@ update_box_item_content_sizes :: proc(
   if .VERTICAL == boxi.layout
   {
     available_space = size.y
-    available_space -= (boxi.header != "") ? g_header_height : 0
+    available_space -= (boxi.header != "") ? cfg.header_height : 0
   }
   else
   {
@@ -122,7 +116,7 @@ update_box_item_content_sizes :: proc(
         is_constrained = true
       }
 
-      #partial switch d in e.data
+      #partial switch f in e.form
       {
       case TextItem, ImageItem, ButtonItem:
         e.width  -= (.VERTICAL == boxi.layout) ? double_pad : 0
@@ -145,7 +139,7 @@ update_box_item_content_sizes :: proc(
       else
       {
         e.height = size.y
-        e.height -= (boxi.header != "") ? g_header_height : 0
+        e.height -= (boxi.header != "") ? cfg.header_height : 0
       }
 
       if e.min_size.y <= e.max_size.y
@@ -154,7 +148,7 @@ update_box_item_content_sizes :: proc(
         is_constrained = true
       }
 
-      #partial switch d in e.data
+      #partial switch f in e.form
       {
       case TextItem, ImageItem, ButtonItem:
         e.height -= (.VERTICAL == boxi.layout) ? 0 : double_pad
@@ -201,7 +195,7 @@ update_box_item_content_sizes :: proc(
     #partial switch e.border_style
     {
     case .GLOBAL:
-      border = &g_border
+      border = &cfg.border
     case .CUSTOM:
       border = e.border
     }
@@ -211,20 +205,24 @@ update_box_item_content_sizes :: proc(
     {
       line_rec := &border.line_rec
 
-      e_size.x -= (line_rec.left != nil)? line_rec.left.height : line_rec.height
-      e_size.x -= (line_rec.right!= nil)? line_rec.right.height: line_rec.height
+      e_size.x -= (line_rec.custom[.LEFT]!=nil)? line_rec.custom[.LEFT].height :
+                                                 line_rec.height
+      e_size.x -= (line_rec.custom[.RIGHT]!=nil)?line_rec.custom[.RIGHT].height:
+                                                 line_rec.height
 
-      e_size.y -= (line_rec.top  != nil)? line_rec.top.height  : line_rec.height
-      e_size.y -= (line_rec.bot  != nil)? line_rec.bot.height  : line_rec.height
+      e_size.y -= (line_rec.custom[.TOP] != nil)? line_rec.custom[.TOP].height :
+                                                  line_rec.height
+      e_size.y -= (line_rec.custom[.BOT] != nil)? line_rec.custom[.BOT].height :
+                                                  line_rec.height
     }
 
-    #partial switch &d in e.data
+    #partial switch &f in e.form
     {
     case TextItem:
-      update_text_item_buffer(&d, e_size, ((e.font != nil) ? e.font^:p_font))
+      update_text_item_buffer(&f, e_size, ((e.font != nil) ? e.font^:p_font))
     case BoxItem:
       update_box_item_content_sizes(
-        &d,
+        &f,
         e_size,
         ((e.font != nil) ? e.font^ : p_font),
         ((e.pad  != nil) ? e.pad^  : p_pad))
@@ -251,7 +249,7 @@ draw_box_item :: proc(
   header_offset: f32
   if boxi.header != ""
   {
-    header_offset = g_header_height
+    header_offset = cfg.header_height
     header_rec := rec
     header_rec.height = header_offset
 
@@ -259,7 +257,7 @@ draw_box_item :: proc(
     header_fg_color := (highlight) ? p_bg.color : p_fg_color
 
     rl.DrawRectangleRec(header_rec, header_bg_color)
-    rl.DrawRectangleLinesEx(header_rec, g_line_thick, g_fg_color)
+    rl.DrawRectangleLinesEx(header_rec, cfg.line_thick, cfg.fg_color)
 
     header_rec.x += p_pad
     header_rec.y += math.trunc(p_pad * 0.25)
@@ -268,7 +266,7 @@ draw_box_item :: proc(
       boxi.header,
       {header_rec.x, header_rec.y},
       header_rec.width,
-      g_font,
+      cfg.font,
       header_fg_color)
   }
 
@@ -295,7 +293,7 @@ draw_box_item :: proc(
     e.y =  content_rec.y
     e.y += (.VERTICAL == boxi.layout) ? content_offset : 0
 
-    switch d in e.data
+    switch f in e.form
     {
     case TextItem, ImageItem, ButtonItem:
       must_add_pad := false
@@ -305,7 +303,7 @@ draw_box_item :: proc(
       }
       else if 1 <= i
       {
-        #partial switch pd in boxi.content[i-1].data
+        #partial switch pf in boxi.content[i-1].form
         {
         case TextItem, ImageItem, ButtonItem:
           must_add_pad = true
@@ -326,7 +324,7 @@ draw_box_item :: proc(
     case BoxItem:
       if 1 <= i
       {
-        #partial switch d in boxi.content[i-1].data
+        #partial switch f in boxi.content[i-1].form
         {
         case BoxItem:
           e.y -= (.VERTICAL == boxi.layout) ? p_pad : 0

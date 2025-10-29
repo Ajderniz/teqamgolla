@@ -5,54 +5,9 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
-ItemBackground :: struct {
-  color     : rl.Color,
-  texture   : ^rl.Texture,
-  draw_mode : enum { STRETCH, TILE }
-}
-
-ItemBorderRectangles :: struct {
-  corner_rec : struct {
-    using default : rl.Rectangle,
-    tl            : ^rl.Rectangle,
-    tr            : ^rl.Rectangle,
-    bl            : ^rl.Rectangle,
-    br            : ^rl.Rectangle,
-  },
-  line_rec   : struct {
-    using default : rl.Rectangle,
-    top           : ^rl.Rectangle,
-    bot           : ^rl.Rectangle,
-    left          : ^rl.Rectangle,
-    right         : ^rl.Rectangle,
-  }
-}
-
-ItemBorder :: struct {
-  texture    : rl.Texture,
-  draw_mode  : enum { STRETCH, TILE },
-  using recs : ItemBorderRectangles
-}
-
-Item :: struct {
-  data            : union { TextItem, ImageItem, ButtonItem , BoxItem, },
-
-  using rec     : rl.Rectangle,
-  min_size      : rl.Vector2,
-  max_size      : rl.Vector2,
-  non_resizable : struct { x, y: bool },
-
-  font          : ^rl.Font,
-  pad           : ^f32,
-  fg_color      : ^rl.Color,
-  bg            : ^ItemBackground,
-
-  border_style  : enum { NONE, LINE, GLOBAL, CUSTOM },
-  border        : ^ItemBorder
-}
 
 @(private)
-get_item_under_mouse :: proc(
+get_sub_item_under_mouse :: proc(
   item: ^Item,
   mouse_pos: rl.Vector2) -> ^Item
 {
@@ -60,15 +15,15 @@ get_item_under_mouse :: proc(
   {
     return nil
   }
-  switch d in item.data
+  switch f in item.form
   {
   case TextItem, ImageItem, ButtonItem:
     return item
 
   case BoxItem:
-    for e in d.content
+    for e in f.content
     {
-      hovered := get_item_under_mouse(e, mouse_pos)
+      hovered := get_sub_item_under_mouse(e, mouse_pos)
       if hovered != nil
       {
         return hovered
@@ -81,8 +36,9 @@ get_item_under_mouse :: proc(
 configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
 {
   font := (item.font != nil) ? item.font^ : p_font
+  pad  := (item.pad != nil)  ? item.pad^  : p_pad
 
-  switch data in item.data
+  switch form in item.form
   {
   case TextItem:
     glyph_size := rl.Vector2 {
@@ -94,45 +50,51 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
       (item.min_size.y<(glyph_size.y*3))? (glyph_size.y*3):item.min_size.y
 
   case ImageItem:
-    og_size := rl.Vector2{ f32(data.texture.width),f32(data.texture.height) }
+    og_size := rl.Vector2{ f32(form.texture.width),f32(form.texture.height) }
     item.min_size.x = (item.min_size.x < og_size.x)? og_size.x : item.min_size.x
     item.min_size.y = (item.min_size.y < og_size.y)? og_size.y : item.min_size.y
 
   case ButtonItem:
-    item.min_size = get_text_size(data.label, font)
+    item.min_size = get_text_size(form.label, font)
+    if form.icon != nil
+    {
+      item.min_size.x += f32(form.icon.width) + pad
+      icon_height := f32(form.icon.height)
+      item.min_size.y =  (item.min_size.y < icon_height) ? icon_height :
+                                                           item.min_size.y
+    }
 
   case BoxItem:
 
-    pad := (item.pad != nil) ? item.pad^ : p_pad
     double_pad := pad * 2
 
-    if len(data.content) <= 0
+    if len(form.content) <= 0
     {
       item.min_size.x =  font.recs[0].width + double_pad
       item.min_size.y =  f32(font.baseSize) + double_pad
-      item.min_size.y += (data.header != "") ? g_header_height : 0
+      item.min_size.y += (form.header != "") ? cfg.header_height : 0
       return
     }
 
     min_size: rl.Vector2
 
-    for e in data.content
+    for e in form.content
     {
       configure_item_min_size(e, font, pad)
 
       this_min_size := e.min_size
-      switch d in e.data
+      switch f in e.form
       {
       case TextItem, ImageItem, ButtonItem:
-        this_min_size.x += (.VERTICAL == data.layout) ? double_pad : pad
-        this_min_size.y += (.VERTICAL == data.layout) ? pad : double_pad
+        this_min_size.x += (.VERTICAL == form.layout) ? double_pad : pad
+        this_min_size.y += (.VERTICAL == form.layout) ? pad : double_pad
 
       case BoxItem:
-        this_min_size.x -= (.VERTICAL == data.layout) ? 0 : pad
-        this_min_size.y -= (.VERTICAL == data.layout) ? pad : 0
+        this_min_size.x -= (.VERTICAL == form.layout) ? 0 : pad
+        this_min_size.y -= (.VERTICAL == form.layout) ? pad : 0
       }
 
-      if .VERTICAL == data.layout
+      if .VERTICAL == form.layout
       {
         min_size.x =  (min_size.x < this_min_size.x)? this_min_size.x:min_size.x
         min_size.y += this_min_size.y
@@ -143,9 +105,9 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
         min_size.y =  (min_size.y < this_min_size.y)? this_min_size.y:min_size.y
       }
     }
-    min_size.x += (.VERTICAL == data.layout) ? 0 : pad
-    min_size.y += (.VERTICAL == data.layout) ? pad : 0
-    min_size.y += (data.header != "") ? g_header_height : 0
+    min_size.x += (.VERTICAL == form.layout) ? 0 : pad
+    min_size.y += (.VERTICAL == form.layout) ? pad : 0
+    min_size.y += (form.header != "") ? cfg.header_height : 0
 
     item.min_size.x =
       (item.min_size.x < min_size.x) ? min_size.x : item.min_size.x
@@ -163,18 +125,20 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
   #partial switch item.border_style
   {
   case .GLOBAL:
-    border = &g_border
+    border = &cfg.border
   case .CUSTOM:
     border = item.border
   }
   line_rec := &border.line_rec
 
-  item.min_size.x+=(line_rec.left!=nil)? line_rec.left.height:line_rec.height
-  item.min_size.x += (line_rec.right != nil) ? line_rec.right.height :
-                                                  line_rec.height
-  item.min_size.y += (line_rec.top!=nil)? line_rec.top.height:line_rec.height
-  item.min_size.y += (line_rec.bot != nil) ? line_rec.bot.height :
-                                                   line_rec.height
+  left  := line_rec.custom[.LEFT]
+  right := line_rec.custom[.RIGHT]
+  top   := line_rec.custom[.TOP]
+  bot   := line_rec.custom[.BOT]
+  item.min_size.x += (left  != nil) ? left.height  : line_rec.height
+  item.min_size.x += (right != nil) ? right.height : line_rec.height
+  item.min_size.y += (top   != nil) ? top.height   : line_rec.height
+  item.min_size.y += (bot   != nil) ? bot.height   : line_rec.height
 }
 
 @(private)
@@ -244,7 +208,7 @@ draw_item :: proc(
   #partial switch item.border_style
   {
   case .GLOBAL:
-    border = &g_border
+    border = &cfg.border
   case .CUSTOM:
     border = item.border
   }
@@ -255,19 +219,21 @@ draw_item :: proc(
     line_rec   := &border.line_rec
     corner_rec := &border.corner_rec
     border_recs = {
-      line_rec = {
-        default = line_rec.default,
-        top     = (line_rec.top   != nil) ? line_rec.top   : &line_rec.default,
-        bot     = (line_rec.bot   != nil) ? line_rec.bot   : &line_rec.default,
-        left    = (line_rec.left  != nil) ? line_rec.left  : &line_rec.default,
-        right   = (line_rec.right != nil) ? line_rec.right : &line_rec.default,
-      },
-      corner_rec = {
-        default = corner_rec.default,
-        tl      = (corner_rec.tl != nil) ? corner_rec.tl : &corner_rec.default,
-        tr      = (corner_rec.tr != nil) ? corner_rec.tr : &corner_rec.default,
-        bl      = (corner_rec.bl != nil) ? corner_rec.bl : &corner_rec.default,
-        br      = (corner_rec.br != nil) ? corner_rec.br : &corner_rec.default,
+      line_rec = { default = line_rec.default },
+      corner_rec = { default = corner_rec.default }
+    }
+    for rec, i in line_rec.custom
+    {
+      if rec != nil
+      {
+        border_recs.line_rec.custom[i] = rec
+      }
+    }
+    for rec, i in corner_rec.custom
+    {
+      if rec != nil
+      {
+        border_recs.corner_rec.custom[i] = rec
       }
     }
   }
@@ -275,39 +241,39 @@ draw_item :: proc(
   draw_item:
   {
     rec := item.rec
-    #partial switch data in item.data
+    #partial switch form in item.form
     {
     case TextItem, ImageItem:
       if border != nil
       {
         line_rec := &border_recs.line_rec
 
-        rec.x      += line_rec.left.height
-        rec.y      += line_rec.right.height
+        rec.x      += line_rec.custom[.LEFT].height
+        rec.y      += line_rec.custom[.RIGHT].height
 
-        rec.width  -= line_rec.left.height
-        rec.width  -= line_rec.right.height
+        rec.width  -= line_rec.custom[.LEFT].height
+        rec.width  -= line_rec.custom[.RIGHT].height
 
-        rec.height -= line_rec.top.height
-        rec.height -= line_rec.bot.height
+        rec.height -= line_rec.custom[.TOP].height
+        rec.height -= line_rec.custom[.BOT].height
       }
     }
 
-    switch &data in item.data
+    switch &form in item.form
     {
     case TextItem:
-      draw_text_item(data, rec, font, fg_color)
+      draw_text_item(form, rec, font, fg_color)
     case ImageItem:
-      draw_image_item(data, rec)
+      draw_image_item(form, rec)
     case ButtonItem:
       tmp_fg_color := fg_color
       tmp_bg_color := bg.color
-      fg_color = (data.highlight) ? tmp_bg_color : tmp_fg_color
-      bg.color = (data.highlight) ? tmp_fg_color : tmp_bg_color
-      draw_button_item(data, rec, font, fg_color, bg)
-      data.highlight = false
+      fg_color = (form.hovered) ? tmp_bg_color : tmp_fg_color
+      bg.color = (form.hovered) ? tmp_fg_color : tmp_bg_color
+      draw_button_item(form, rec, font, fg_color, bg)
+      form.hovered = false
     case BoxItem:
-      draw_box_item(data, rec, font, pad, fg_color, bg, border, box_highlight)
+      draw_box_item(form, rec, font, pad, fg_color, bg, border, box_highlight)
     }
   }
 
@@ -319,19 +285,19 @@ draw_item :: proc(
     }
 
     rec := item.rec
-    #partial switch data in item.data
+    #partial switch form in item.form
     {
     case BoxItem:
-      if data.header != ""
+      if form.header != ""
       {
-        rec.y      += g_header_height
-        rec.height -= g_header_height
+        rec.y      += cfg.header_height
+        rec.height -= cfg.header_height
       }
     }
 
     if nil == border || !rl.IsTextureValid(border.texture)
     {
-      rl.DrawRectangleLinesEx(rec, g_line_thick, fg_color)
+      rl.DrawRectangleLinesEx(rec, cfg.line_thick, fg_color)
       return
     }
 
@@ -345,73 +311,107 @@ draw_item :: proc(
       {
         rl.DrawTexturePro(
           border.texture,
-          line_rec.top^,
-          { rec.x, rec.y, rec.width, line_rec.top.height },
+          line_rec.custom[.TOP]^,
+          { rec.x, rec.y, rec.width, line_rec.custom[.TOP].height },
           { 0, 0 },
           0,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          line_rec.right^,
-          { rec.x + rec.width, rec.y, rec.height, line_rec.right.height },
+          line_rec.custom[.RIGHT]^,
+          { 
+            rec.x + rec.width,
+            rec.y,
+            rec.height,
+            line_rec.custom[.RIGHT].height
+          },
           { 0, 0 },
           90,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          line_rec.bot^,
-          { rec.x+rec.width, rec.y+rec.height, rec.width, line_rec.bot.height },
+          line_rec.custom[.BOT]^,
+          { 
+            rec.x+rec.width, 
+            rec.y+rec.height,
+            rec.width,
+            line_rec.custom[.BOT].height
+          },
           { 0, 0 },
           180,
           fg_color)
         rl.DrawTexturePro(
           border.texture,
-          line_rec.left^,
-          { rec.x, rec.y + rec.height, rec.height, line_rec.left.height },
+          line_rec.custom[.LEFT]^,
+          {
+            rec.x,
+            rec.y + rec.height,
+            rec.height,
+            line_rec.custom[.LEFT].height
+          },
           { 0, 0 },
           270,
           fg_color)
       }
       else
       {
-        for x := rec.x + corner_rec.tl.width;
-            x <  (rec.x + rec.width - corner_rec.tr.height);
-            x += line_rec.top.width
+        for x := rec.x + corner_rec.custom[.TL].width;
+            x <  (rec.x + rec.width - corner_rec.custom[.TR].height);
+            x += line_rec.custom[.TOP].width
         {
-          rl.DrawTextureRec(border.texture, line_rec.top^, {x, rec.y}, fg_color)
+          rl.DrawTextureRec(
+            border.texture,
+            line_rec.custom[.TOP]^,
+            {x, rec.y},
+            fg_color
+            )
         }
-        for y := rec.y + corner_rec.tr.width;
-            y <  (rec.y + rec.height - corner_rec.br.height);
-            y += line_rec.right.width
+        for y := rec.y + corner_rec.custom[.TR].width;
+            y <  (rec.y + rec.height - corner_rec.custom[.BR].height);
+            y += line_rec.custom[.RIGHT].width
         {
           rl.DrawTexturePro(
             border.texture,
-            line_rec.right^,
-            { rec.x+rec.width, y, line_rec.right.width, line_rec.right.height },
+            line_rec.custom[.RIGHT]^,
+            {
+              rec.x+rec.width,
+              y,
+              line_rec.custom[.RIGHT].width,
+              line_rec.custom[.RIGHT].height
+            },
             { 0, 0 },
             90,
             fg_color)
         }
-        for x := rec.x + (corner_rec.bl.width * 2);
+        for x := rec.x + (corner_rec.custom[.BL].width * 2);
             x <  (rec.x + rec.width);
-            x += line_rec.bot.width
+            x += line_rec.custom[.BOT].width
         {
           rl.DrawTexturePro(
             border.texture,
-            line_rec.bot^,
-            { x, rec.y + rec.height, line_rec.bot.width, line_rec.bot.height },
+            line_rec.custom[.BOT]^,
+            { 
+              x,
+              rec.y + rec.height,
+              line_rec.custom[.BOT].width,
+              line_rec.custom[.BOT].height },
             { 0, 0 },
             180,
             fg_color)
         }
-        for y := rec.y + (corner_rec.tl.width * 2);
+        for y := rec.y + (corner_rec.custom[.TL].width * 2);
             y <  (rec.y + rec.height);
-            y += line_rec.left.width
+            y += line_rec.custom[.LEFT].width
         {
           rl.DrawTexturePro(
             border.texture,
-            line_rec.left^,
-            { rec.x, y, line_rec.left.width, line_rec.left.height },
+            line_rec.custom[.LEFT]^,
+            { 
+              rec.x,
+              y,
+              line_rec.custom[.LEFT].width,
+              line_rec.custom[.LEFT].height
+            },
             { 0, 0 },
             270,
             fg_color)
@@ -423,21 +423,35 @@ draw_item :: proc(
     {
       draw_item_background(
         bg,
-        { rec.x, rec.y, corner_rec.tl.width, corner_rec.tl.height })
-      rl.DrawTextureRec(border.texture, corner_rec.tl^, {rec.x,rec.y}, fg_color)
+        {
+          rec.x,
+          rec.y,
+          corner_rec.custom[.TL].width,
+          corner_rec.custom[.TL].height
+        })
+      rl.DrawTextureRec(
+        border.texture,
+        corner_rec.custom[.TL]^,
+        {rec.x,rec.y},
+        fg_color
+        )
 
       draw_item_background(
         bg,
         {
-          rec.x + rec.width - corner_rec.tr.width,
+          rec.x + rec.width - corner_rec.custom[.TR].width,
           rec.y,
-          corner_rec.tr.width,
-          corner_rec.tr.height
+          corner_rec.custom[.TR].width,
+          corner_rec.custom[.TR].height
         })
       rl.DrawTexturePro(
         border.texture,
-        corner_rec.tr^,
-        { rec.x + rec.width, rec.y, corner_rec.tr.width, corner_rec.tr.height },
+        corner_rec.custom[.TR]^,
+        { 
+          rec.x + rec.width,
+          rec.y, 
+          corner_rec.custom[.TR].width, 
+          corner_rec.custom[.TR].height },
         { 0, 0 },
         90,
         fg_color)
@@ -445,19 +459,19 @@ draw_item :: proc(
       draw_item_background(
         bg,
         {
-          rec.x + rec.width - corner_rec.br.width,
-          rec.y + rec.height - corner_rec.br.height,
-          corner_rec.br.width,
-          corner_rec.br.height
+          rec.x + rec.width - corner_rec.custom[.BR].width,
+          rec.y + rec.height - corner_rec.custom[.BR].height,
+          corner_rec.custom[.BR].width,
+          corner_rec.custom[.BR].height
         })
       rl.DrawTexturePro(
         border.texture,
-        corner_rec.br^,
+        corner_rec.custom[.BR]^,
         {
           rec.x + rec.width,
           rec.y + rec.height,
-          corner_rec.br.width,
-          corner_rec.br.height
+          corner_rec.custom[.BR].width,
+          corner_rec.custom[.BR].height
         },
         { 0, 0 },
         180,
@@ -467,18 +481,18 @@ draw_item :: proc(
         bg,
         {
           rec.x,
-          rec.y + rec.height - corner_rec.bl.height,
-          corner_rec.bl.width,
-          corner_rec.bl.height
+          rec.y + rec.height - corner_rec.custom[.BL].height,
+          corner_rec.custom[.BL].width,
+          corner_rec.custom[.BL].height
         })
       rl.DrawTexturePro(
         border.texture,
-        corner_rec.bl^,
+        corner_rec.custom[.BL]^,
         {
           rec.x,
           rec.y + rec.height,
-          corner_rec.bl.width,
-          corner_rec.bl.height
+          corner_rec.custom[.BL].width,
+          corner_rec.custom[.BL].height
         },
         { 0, 0 },
         270,

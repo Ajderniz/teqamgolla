@@ -4,8 +4,10 @@ import    "core:math"
 
 import rl "vendor:raylib"
 
+CURSOR_SIZE :: 16
+
 State :: enum {
-  DEFAULT,
+  DEFAULT     = 0,
   POTENTIAL,
   DRAG,
   RESIZE,
@@ -15,39 +17,41 @@ State :: enum {
   PAGE_NEXT
 }
 
-@(private) g_state : State
-@(private) g_txr   : rl.Texture
-
-@(private) g_conf  : [State]struct{txr_offset: f32, pos: rl.Vector2}
+@(private)
+cfg: struct {
+  txr     : rl.Texture,
+  offsets : [State]rl.Vector2
+}
+@(private) state: State
 
 init :: proc(txr_path: cstring)
 {
-  g_txr  = rl.LoadTexture(txr_path)
+  cfg.txr  = rl.LoadTexture(txr_path)
   rl.HideCursor()
 
-  g_conf[.DEFAULT]     = {}
-  g_conf[.POTENTIAL]   = {16,  { -8,  -8}}
-  g_conf[.DRAG]        = {32,  { -8,  -8}}
-  g_conf[.RESIZE]      = {48,  {-16, -16}}
-  g_conf[.SCROLL_UP]   = {64,  { -4, -10}}
-  g_conf[.SCROLL_DOWN] = {80,  { -4,  -4}}
-  g_conf[.PAGE_PREV]   = {96,  { -8,  -8}}
-  g_conf[.PAGE_NEXT]   = {112, { -8,  -8}}
+  cfg.offsets[.DEFAULT]     = {}
+  cfg.offsets[.POTENTIAL]   = { -8,  -8}
+  cfg.offsets[.DRAG]        = { -8,  -8}
+  cfg.offsets[.RESIZE]      = {-16, -16}
+  cfg.offsets[.SCROLL_UP]   = { -4, -10}
+  cfg.offsets[.SCROLL_DOWN] = { -4,  -4}
+  cfg.offsets[.PAGE_PREV]   = { -8,  -8}
+  cfg.offsets[.PAGE_NEXT]   = { -8,  -8}
 }
 
 fini :: proc()
 {
-  rl.UnloadTexture(g_txr)
+  rl.UnloadTexture(cfg.txr)
 }
 
-set_state :: #force_inline proc(state: State)
+set_state :: #force_inline proc(p_state: State)
 {
-  g_state = state
+  state = p_state
 }
 
 get_state :: #force_inline proc() -> State
 {
-  return g_state
+  return state
 }
 
 draw :: proc(scale: f32)
@@ -56,6 +60,15 @@ draw :: proc(scale: f32)
   pos.x = math.trunc(pos.x / scale)
   pos.y = math.trunc(pos.y / scale)
 
-  conf := g_conf[g_state]
-  rl.DrawTextureRec(g_txr, {conf.txr_offset, 0, 16, 16}, pos+conf.pos, rl.WHITE)
+  offset := cfg.offsets[state]
+  rl.DrawTextureRec(
+    cfg.txr, 
+    {
+      CURSOR_SIZE * f32(state), 
+      0, 
+      CURSOR_SIZE, 
+      CURSOR_SIZE
+    }, 
+    pos + offset,
+    rl.WHITE)
 }

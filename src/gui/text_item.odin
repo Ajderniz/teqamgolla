@@ -6,14 +6,6 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-TextItem :: struct {
-  txt         : string,
-  buffer      : [dynamic]string,
-  glyph_size  : rl.Vector2,
-  offset      : uint,
-  scroll_type : enum { VERTICAL, PAGED }
-}
-
 @(private)
 draw_text_label :: proc(
   txt       : string,
