@@ -17,7 +17,7 @@ get_sub_item_under_mouse :: proc(
   }
   switch f in item.form
   {
-  case TextItem, ImageItem, ButtonItem:
+  case TextItem, TextureItem, ButtonItem:
     return item
 
   case BoxItem:
@@ -49,7 +49,7 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
     item.min_size.y =
       (item.min_size.y<(glyph_size.y*3))? (glyph_size.y*3):item.min_size.y
 
-  case ImageItem:
+  case TextureItem:
     og_size := rl.Vector2{ f32(form.texture.width),f32(form.texture.height) }
     item.min_size.x = (item.min_size.x < og_size.x)? og_size.x : item.min_size.x
     item.min_size.y = (item.min_size.y < og_size.y)? og_size.y : item.min_size.y
@@ -85,7 +85,7 @@ configure_item_min_size :: proc(item: ^Item, p_font:rl.Font, p_pad:f32)
       this_min_size := e.min_size
       switch f in e.form
       {
-      case TextItem, ImageItem, ButtonItem:
+      case TextItem, TextureItem, ButtonItem:
         this_min_size.x += (.VERTICAL == form.layout) ? double_pad : pad
         this_min_size.y += (.VERTICAL == form.layout) ? pad : double_pad
 
@@ -243,7 +243,7 @@ draw_item :: proc(
     rec := item.rec
     #partial switch form in item.form
     {
-    case TextItem, ImageItem:
+    case TextItem, TextureItem:
       if border != nil
       {
         line_rec := &border_recs.line_rec
@@ -263,8 +263,8 @@ draw_item :: proc(
     {
     case TextItem:
       draw_text_item(form, rec, font, fg_color)
-    case ImageItem:
-      draw_image_item(form, rec)
+    case TextureItem:
+      draw_texture_item(form, rec)
     case ButtonItem:
       tmp_fg_color := fg_color
       tmp_bg_color := bg.color

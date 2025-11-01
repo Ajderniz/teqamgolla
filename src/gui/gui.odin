@@ -6,6 +6,7 @@
 
 package gui
 
+import     "core:log"
 import     "core:math"
 import str "core:strings"
 
@@ -169,6 +170,12 @@ process_input :: proc(
               txt_item_dir = .NEXT
               cursor.set_state(.PAGE_NEXT)
             }
+          }
+
+        case TextureItem:
+          if .CAPTURE_INPUT in f.options
+          {
+            break action
           }
 
         case ButtonItem:

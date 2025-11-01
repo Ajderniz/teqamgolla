@@ -68,7 +68,7 @@ draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
 
   #partial switch &form in win.form
   {
-  case TextItem, ImageItem:
+  case TextItem, TextureItem:
     if update_sizes
     {
       #partial switch &f in form

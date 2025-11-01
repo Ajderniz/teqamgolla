@@ -1,6 +1,5 @@
 package gui
 
-import     "core:log"
 import     "core:math"
 import str "core:strings"
 

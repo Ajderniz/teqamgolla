@@ -15,10 +15,10 @@ ButtonItem :: struct {
   hovered : bool,
 }
 
-ImageItem :: struct {
+TextureItem :: struct {
   texture : rl.Texture,
   resize  : enum { NONE, CENTER, STRETCH },
-  is_rtxr : bool,
+  options : bit_set[enum{ IS_FRAMEBUFFER, CAPTURE_INPUT }]
 }
 
 ItemBackground :: struct {
@@ -46,7 +46,7 @@ ItemBorder :: struct {
 }
 
 Item :: struct {
-  form          : union { TextItem, ImageItem, ButtonItem , BoxItem, },
+  form          : union { TextItem, TextureItem, ButtonItem , BoxItem, },
 
   using rec     : rl.Rectangle,
   min_size      : rl.Vector2,

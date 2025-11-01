@@ -115,9 +115,9 @@ main :: proc()
         header = "FP",
         content = {
           &gui.Item {
-            form = gui.ImageItem {
+            form = gui.TextureItem {
               texture = first_person_rtxr.texture,
-              is_rtxr = true,
+              options = { .IS_FRAMEBUFFER, .CAPTURE_INPUT }
             }
           },
         }
@@ -132,9 +132,9 @@ main :: proc()
         header = "MM",
         content = {
           &gui.Item {
-            form = gui.ImageItem {
+            form = gui.TextureItem {
               texture = minimap_rtxr.texture,
-              is_rtxr = true
+              options = { .IS_FRAMEBUFFER }
             }
           }
         }

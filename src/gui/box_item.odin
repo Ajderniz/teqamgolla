@@ -28,7 +28,7 @@ update_box_item_content_sizes :: proc(
       size := (.VERTICAL == boxi.layout) ? bi.min_size.y : bi.min_size.x
       switch f in bi.form
       {
-      case TextItem, ImageItem, ButtonItem:
+      case TextItem, TextureItem, ButtonItem:
         size += p_pad
       case BoxItem:
         size -= p_pad
@@ -118,7 +118,7 @@ update_box_item_content_sizes :: proc(
 
       #partial switch f in e.form
       {
-      case TextItem, ImageItem, ButtonItem:
+      case TextItem, TextureItem, ButtonItem:
         e.width  -= (.VERTICAL == boxi.layout) ? double_pad : 0
       }
     }
@@ -150,7 +150,7 @@ update_box_item_content_sizes :: proc(
 
       #partial switch f in e.form
       {
-      case TextItem, ImageItem, ButtonItem:
+      case TextItem, TextureItem, ButtonItem:
         e.height -= (.VERTICAL == boxi.layout) ? 0 : double_pad
       }
     }
@@ -295,7 +295,7 @@ draw_box_item :: proc(
 
     switch f in e.form
     {
-    case TextItem, ImageItem, ButtonItem:
+    case TextItem, TextureItem, ButtonItem:
       must_add_pad := false
       if 0 == i
       {
@@ -305,7 +305,7 @@ draw_box_item :: proc(
       {
         #partial switch pf in boxi.content[i-1].form
         {
-        case TextItem, ImageItem, ButtonItem:
+        case TextItem, TextureItem, ButtonItem:
           must_add_pad = true
         }
       }
