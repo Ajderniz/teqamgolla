@@ -2,6 +2,16 @@ package gui
 
 import rl "vendor:raylib"
 
+CursorState :: enum
+{
+  RESIZE    = 0,
+  SCROLL_UP,
+  SCROLL_DOWN,
+  PAGE_PREV,
+  PAGE_NEXT,
+  COUNT
+}
+
 BoxItem :: struct {
   header   : string,
   content  : []^Item,

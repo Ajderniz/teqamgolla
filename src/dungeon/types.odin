@@ -9,6 +9,29 @@ Angle     :: enum { V0, H90, V180, H270 }
 
 Direction :: enum { NORTH, EAST, SOUTH, WEST }
 
+CursorState :: enum
+{
+  FRONT,
+  BACK,
+  STRAFE_LEFT,
+  STRAFE_RIGHT,
+  TURN_LEFT, 
+  TURN_RIGHT, 
+  COUNT
+}
+
+PlayerMovement :: enum {
+  NONE,
+  FRONT, 
+  BACK, 
+  STRAFE_LEFT, 
+  STRAFE_RIGHT, 
+  TURN_LEFT, 
+  TURN_RIGHT, 
+  UP, 
+  DOWN 
+}
+
 PlayerState :: struct {
   using pos: Vector3Int,
   dir: Direction,

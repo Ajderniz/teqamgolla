@@ -1,4 +1,6 @@
-package common
+package input
+
+import    "core:math"
 
 import rl "vendor:raylib"
 
@@ -26,10 +28,12 @@ get_mouse_button_pressed :: proc() -> rl.MouseButton
   return .BACK
 }
 
-get_input_state :: proc() -> InputState
+get_input_state :: proc(scr_scale: f32) -> InputState
 {
   state: InputState
   state.mouse_pos            = rl.GetMousePosition()
+  state.mouse_pos.x          = math.trunc(state.mouse_pos.x / scr_scale)
+  state.mouse_pos.y          = math.trunc(state.mouse_pos.y / scr_scale)
   state.mouse_button_pressed = get_mouse_button_pressed()
   state.mouse_wheel_move     = rl.GetMouseWheelMove()
   state.key_pressed          = rl.GetKeyPressed()

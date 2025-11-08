@@ -1,6 +1,10 @@
 package gui
 
+import    "core:log"
+
 import rl "vendor:raylib"
+
+import    "../common"
 
 @(private)
 draw_window :: proc(win: ^Window, highlight := false, update_sizes := false)
@@ -129,14 +133,44 @@ move_window_index_to_index :: proc(
   st.wlist[dst_index] = win
 }
 
-add_window :: #force_inline proc(win: ^Window)
+add_window :: proc(win: ^Window) -> bool
 {
   win._id = uint(len(st.wlist))
-  inject_at(&st.wlist, 0, win)
+  ok := inject_at(&st.wlist, 0, win)
+  if !ok
+  {
+    log.error("Could not inject window")
+    return false
+  }
+  return true
 }
 
 remove_window :: #force_inline proc(win: ^Window)
 {
   ordered_remove(&st.wlist, win._id)
+}
+
+can_window_capure_input :: proc(id: uint, mouse_pos: rl.Vector2) -> bool
+{
+  for win, i in st.wlist
+  {
+    if win._id != id
+    {
+      continue
+    }
+    if !common.is_v2_within_rec(mouse_pos, win.rec)
+    {
+      return false
+    }
+    for j in 0..<i
+    {
+      if common.is_v2_within_rec(mouse_pos, st.wlist[j].item.rec)
+      {
+        return false
+      }
+    }
+    return true
+  }
+  return false
 }
 

@@ -2,6 +2,7 @@ package dungeon
 
 import      "core:encoding/json"
 import      "core:log"
+import      "core:math"
 import      "core:os"
 import path "core:path/filepath"
 import str  "core:strings"
@@ -9,10 +10,15 @@ import str  "core:strings"
 import rl   "vendor:raylib"
 import      "vendor:raylib/rlgl"
 
+import      "../common"
+import      "../gui"
+import cur  "../gui/cursor"
 import inp  "../input"
 
 MINIMAP_BLOCK_SIZE  :: 5
 PERSPECTIVE_STRETCH :: 2
+
+CURSOR_FIELD_ID :: "dungeon"
 
 @(private)
 cfg: struct {
@@ -71,6 +77,11 @@ free_block_map :: proc()
   delete(st.bmap)
 }
 
+@(private)
+set_dgn_cursor_state :: #force_inline proc(state: CursorState)
+{
+  cur.set_state(CURSOR_FIELD_ID, int(state))
+}
 
 set_player_state :: #force_inline proc(player: PlayerState)
 {
@@ -82,18 +93,111 @@ get_player_state :: #force_inline proc() -> PlayerState
   return st.player
 }
 
-process_input :: proc(input: inp.InputState) -> (changed: bool)
+process_input :: proc(
+  input     : inp.InputState, 
+  win_id    : uint,
+  rtxr_rec  : rl.Rectangle,
+  scr_scale : f32) -> (changed: bool)
 {
   if len(st.bmap) <= 0
   {
     return false
   }
 
+  potential_move: PlayerMovement = nil
+  if common.is_v2_within_rec(input.mouse_pos, rtxr_rec)
+  {
+    rel_mpos: rl.Vector2 = { 
+      input.mouse_pos.x - rtxr_rec.x,
+      input.mouse_pos.y - rtxr_rec.y
+    }
+    third_width := (rtxr_rec.width / 3)
+    half_height := (rtxr_rec.height / 2)
+
+    if rel_mpos.x < third_width
+    {
+      if rel_mpos.y < half_height
+      {
+        potential_move = .TURN_LEFT
+        set_dgn_cursor_state(.TURN_LEFT)
+      }
+      else
+      {
+        potential_move = .STRAFE_LEFT
+        set_dgn_cursor_state(.STRAFE_LEFT)
+      }
+    }
+    else if rel_mpos.x < (third_width * 2)
+    {
+      if rel_mpos.y < half_height
+      {
+        potential_move = .FRONT
+        set_dgn_cursor_state(.FRONT)
+      }
+      else
+      {
+        potential_move = .BACK
+        set_dgn_cursor_state(.BACK)
+      }
+    }
+    else
+    {
+      if rel_mpos.y < half_height
+      {
+        potential_move = .TURN_RIGHT
+        set_dgn_cursor_state(.TURN_RIGHT)
+      }
+      else
+      {
+        potential_move = .STRAFE_RIGHT
+        set_dgn_cursor_state(.STRAFE_RIGHT)
+      }
+    }
+  }
+  
+  move: PlayerMovement
+  set_move:
+  {
+    if potential_move != nil && .LEFT == input.mouse_button_pressed
+    {
+      move = potential_move
+      break set_move
+    }
+
+    if input.mouse_wheel_move != 0
+    {
+      if input.mouse_wheel_move < 0
+      {
+        move = .DOWN
+      }
+      else
+      {
+        move = .UP
+      }
+      break set_move
+    }
+
+    #partial switch input.key_pressed
+    {
+    case .W: move = .FRONT
+    case .S: move = .BACK
+    case .A: move = .STRAFE_LEFT
+    case .D: move = .STRAFE_RIGHT
+    case .Q: move = .TURN_LEFT
+    case .E: move = .TURN_RIGHT
+    case .R: move = .UP
+    case .F: move = .DOWN
+    }
+  }
+
   player  := st.player
 
-  #partial switch input.key_pressed
+  switch move
   {
-  case .W:
+  case .NONE:
+    return false
+
+  case .FRONT:
     switch player.dir
     {
     case .NORTH: player.y -= (0        < player.y)                 ? 1 : 0
@@ -101,7 +205,7 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.y += (player.y < (len(st.bmap[0]) - 1))    ? 1 : 0
     case .WEST:  player.x -= (0        < player.x)                 ? 1 : 0
     }
-  case .S:
+  case .BACK:
     switch player.dir
     {
     case .NORTH: player.y += (player.y < (len(st.bmap[0]) - 1))    ? 1 : 0
@@ -109,7 +213,7 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.y -= (0        < player.y)                 ? 1 : 0
     case .WEST:  player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
     }
-  case .A:
+  case .STRAFE_LEFT:
     switch player.dir
     {
     case .NORTH: player.x -= (0        < player.x)                 ? 1 : 0
@@ -117,7 +221,7 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
     case .WEST:  player.y += (player.y < (len(st.bmap[0]) - 1 ))   ? 1 : 0
     }
-  case .D:
+  case .STRAFE_RIGHT:
     switch player.dir
     {
     case .NORTH: player.x += (player.x < (len(st.bmap[0][0]) - 1)) ? 1 : 0
@@ -125,7 +229,7 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.x -= (0        < player.x)                 ? 1 : 0
     case .WEST:  player.y -= (0        < player.y)                 ? 1 : 0
     }
-  case .Q:
+  case .TURN_LEFT:
     switch player.dir
     {
     case .NORTH: player.dir = .WEST
@@ -133,7 +237,7 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.dir = .EAST
     case .WEST:  player.dir = .SOUTH
     }
-  case .E:
+  case .TURN_RIGHT:
     switch player.dir
     {
     case .NORTH: player.dir = .EAST
@@ -141,8 +245,8 @@ process_input :: proc(input: inp.InputState) -> (changed: bool)
     case .SOUTH: player.dir = .WEST
     case .WEST:  player.dir = .NORTH
     }
-  case .R:    player.z += (player.z < (len(st.bmap) - 1)) ? 1 : 0
-  case .F:    player.z -= (0        < player.z)           ? 1 : 0
+  case .UP:    player.z += (player.z < (len(st.bmap) - 1)) ? 1 : 0
+  case .DOWN:    player.z -= (0        < player.z)           ? 1 : 0
   }
 
   if st.player != player
@@ -583,10 +687,28 @@ load_block_map :: proc(bmap_filename: string) -> (success: bool)
   return true
 }
 
-init :: proc(maps_dir, img_dir: string)
+init :: proc(
+  maps_dir     : string,
+  img_dir      : string, 
+  cur_txr_path : cstring, 
+  cur_offsets  : []rl.Vector2
+  ) -> bool
 {
   cfg.maps_dir = maps_dir
   cfg.img_dir  = img_dir
+
+  if len(cur_offsets) != int(CursorState.COUNT)
+  {
+    log.error("Offset array has an invalid size")
+    return false
+  }
+  if !cur.add_field(CURSOR_FIELD_ID, cur_txr_path, cur_offsets)
+  {
+    log.error("Could not add cursor field")
+    return false
+  }
+
+  return true
 }
 
 fini :: proc()

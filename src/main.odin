@@ -19,7 +19,7 @@ import rl   "vendor:raylib"
 
 import dgn  "dungeon"
 import      "gui"
-import      "gui/cursor"
+import cur  "gui/cursor"
 import inp  "input"
 
 ROOT_DIR  :: "/home/axell/Work/odin/teqamgolla"
@@ -87,10 +87,18 @@ main :: proc()
   res_path: string
   res_path_cstring: cstring
 
-  res_path = path.join({cfg.dir[.IMG], "cursor.png"})
+  res_path = path.join({cfg.dir[.IMG], "cursor-base.png"})
   res_path_cstring = str.clone_to_cstring(res_path)
   delete(res_path)
-  cursor.init(res_path_cstring)
+  {
+    half_size := f32(cur.CURSOR_SIZE / 2)
+    center: rl.Vector2 = { -half_size, -half_size }
+    if !cur.init(res_path_cstring, { {0,0}, center, center })
+    {
+      log.error("Could not initialize cursor package")
+      os.exit(1)
+    }
+  }
   delete(res_path_cstring)
   font: rl.Font
   {
@@ -107,6 +115,13 @@ main :: proc()
 
     rl.UnloadCodepoints(codepoints)
   }
+
+  fp_item := gui.Item {
+    form = gui.TextureItem {
+      texture = first_person_rtxr.texture,
+      options = { .IS_FRAMEBUFFER, .CAPTURE_INPUT }
+    }
+  }
   win1 := gui.Window {
     draggable = true,
     item = &gui.Item { 
@@ -114,12 +129,7 @@ main :: proc()
       form = gui.BoxItem {
         header = "FP",
         content = {
-          &gui.Item {
-            form = gui.TextureItem {
-              texture = first_person_rtxr.texture,
-              options = { .IS_FRAMEBUFFER, .CAPTURE_INPUT }
-            }
-          },
+          &fp_item,
         }
       }
     }
@@ -141,9 +151,41 @@ main :: proc()
       }
     }
   }
-  gui.init(font, wlist = {&win1, &win2}, base_unit = 8, frame_delay = 3)
 
-  dgn.init(cfg.dir[.MAPS], cfg.dir[.IMG])
+  res_path = path.join({cfg.dir[.IMG], "cursor-gui.png"})
+  res_path_cstring = str.clone_to_cstring(res_path)
+  delete(res_path)
+  ok := gui.init(
+    font, 
+    res_path_cstring,
+    { {-16,-16}, {-4,-10}, {-4,-4}, cur.CENTER_CURSOR, cur.CENTER_CURSOR },
+    wlist = {&win1, &win2}, 
+    base_unit = 8, 
+    frame_delay = 3
+  )
+  delete(res_path_cstring)
+  if !ok
+  {
+    log.error("Could not initialize GUI")
+    os.exit(1)
+  }
+
+  res_path = path.join({cfg.dir[.IMG], "cursor-dungeon.png"})
+  res_path_cstring = str.clone_to_cstring(res_path)
+  delete(res_path)
+  ok = dgn.init(
+    cfg.dir[.MAPS], 
+    cfg.dir[.IMG],
+    res_path_cstring,
+    { cur.CENTER_CURSOR, cur.CENTER_CURSOR, cur.CENTER_CURSOR,
+      cur.CENTER_CURSOR, cur.CENTER_CURSOR, cur.CENTER_CURSOR }
+  )
+  delete(res_path_cstring)
+  if !ok
+  {
+    log.error("Could not initialize dungeon")
+    os.exit(1)
+  }
   if !dgn.load_block_map("test.json")
   {
     log.error("Could not load map")
@@ -156,7 +198,7 @@ main :: proc()
     rl.UnloadRenderTexture(first_person_rtxr)
     rl.UnloadRenderTexture(minimap_rtxr)
 
-    cursor.fini()
+    cur.fini()
     gui.fini()
     dgn.fini()
 
@@ -175,10 +217,11 @@ main :: proc()
 
   for !rl.WindowShouldClose()
   {
-    input := inp.get_input_state()
+    input := inp.get_input_state(SCR_SCALE)
     gui.process_input(input, NAT_SCR_W, NAT_SCR_H, SCR_SCALE)
-    
-    if dgn.process_input(input)
+
+    if gui.can_window_capure_input(win1._id, input.mouse_pos) &&
+       dgn.process_input(input, win1._id, fp_item.rec, SCR_SCALE)
     {
       dgn.update_first_person_rtxr(first_person_rtxr)
       dgn.update_minimap_rtxr(minimap_rtxr, 5)
@@ -188,7 +231,7 @@ main :: proc()
     {
       rl.ClearBackground(rl.DARKBLUE)
       gui.draw_window_list()
-      cursor.draw(SCR_SCALE)
+      cur.draw(SCR_SCALE)
     }
     rl.EndTextureMode()
 

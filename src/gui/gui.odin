@@ -12,8 +12,11 @@ import str "core:strings"
 
 import rl  "vendor:raylib"
 
-import     "cursor"
+import     "../common"
+import cur "cursor"
 import inp "../input"
+
+CURSOR_FIELD_ID :: "gui"
 
 @(private)
 cfg: struct {
@@ -37,16 +40,13 @@ cfg: struct {
 @(private)
 st: struct {
   wlist             : [dynamic]^Window,
-  button_pressed_id : int
+  item_pressed      : ^Item
 }
 
 @(private)
-is_v2_within_rec :: #force_inline proc(
-  v2: rl.Vector2,
-  rec: rl.Rectangle) -> bool
+set_gui_cursor_state :: #force_inline proc(state: CursorState)
 {
-  return(!((v2.x < rec.x || (rec.x + rec.width) < v2.x) ||
-          (v2.y < rec.y || (rec.y + rec.height) < v2.y)))
+  cur.set_state(CURSOR_FIELD_ID, int(state))
 }
 
 @(private)
@@ -93,8 +93,10 @@ process_input :: proc(
   }
 
   mouse_pos := input.mouse_pos
+  /*
   mouse_pos.x = math.trunc(mouse_pos.x / scr_scale)
   mouse_pos.y = math.trunc(mouse_pos.y / scr_scale)
+  */
   mouse_pos.x = (mouse_pos.x < 0) ? 0 : mouse_pos.x
   mouse_pos.y = (mouse_pos.y < 0) ? 0 : mouse_pos.y
   mouse_pos.x = (scr_width  < mouse_pos.x) ? scr_width  : mouse_pos.x
@@ -120,22 +122,22 @@ process_input :: proc(
     case .NONE:
       if 0 == i
       {
-        cursor.set_state(.DEFAULT)
+        cur.set_base_state(.DEFAULT)
       }
       
-      if !is_v2_within_rec(mouse_pos, win.rec)
+      if !common.is_v2_within_rec(mouse_pos, win.rec)
       {
         continue windows
       }
       for j in 0..<i
       {
-        if is_v2_within_rec(mouse_pos, st.wlist[j].item.rec)
+        if common.is_v2_within_rec(mouse_pos, st.wlist[j].item.rec)
         {
           continue windows
         }
       }
       
-      cursor.set_state(.POTENTIAL)
+      cur.set_base_state(.HOVER)
 
       item := get_sub_item_under_mouse(win.item, mouse_pos)
 
@@ -150,12 +152,12 @@ process_input :: proc(
             if mouse_pos.y <= item.y + math.trunc(item.height / 2)
             {
               txt_item_dir = .PREV
-              cursor.set_state(.SCROLL_UP)
+              set_gui_cursor_state(.SCROLL_UP)
             }
             else
             {
               txt_item_dir = .NEXT
-              cursor.set_state(.SCROLL_DOWN)
+              set_gui_cursor_state(.SCROLL_DOWN)
             }
           }
           else // PAGED
@@ -163,30 +165,27 @@ process_input :: proc(
             if mouse_pos.x <= item.x + math.trunc(item.width / 2)
             {
               txt_item_dir = .PREV
-              cursor.set_state(.PAGE_PREV)
+              set_gui_cursor_state(.PAGE_PREV)
             }
             else
             {
               txt_item_dir = .NEXT
-              cursor.set_state(.PAGE_NEXT)
+              set_gui_cursor_state(.PAGE_NEXT)
             }
-          }
-
-        case TextureItem:
-          if .CAPTURE_INPUT in f.options
-          {
-            break action
           }
 
         case ButtonItem:
           f.hovered = true
-          cursor.set_state(.DEFAULT)
+          cur.set_base_state(.DEFAULT)
         }
       }
 
       #partial switch input.mouse_button_pressed
       {
       case .LEFT:
+
+        st.item_pressed = item
+
         if item != nil
         {
           #partial switch &f in item.form
@@ -216,9 +215,14 @@ process_input :: proc(
             }
             break action
 
+          case TextureItem:
+            if .CAPTURE_INPUT in f.options
+            {
+              break action
+            }
+
           case ButtonItem:
             f.hovered = false
-            st.button_pressed_id = int(f.id)
             break action
           }
         }
@@ -227,7 +231,7 @@ process_input :: proc(
         {
           mouse_offset = { (mouse_pos.x - win.x), (mouse_pos.y - win.y) }
           win._act_state = .DRAG
-          cursor.set_state(.DRAG)
+          cur.set_base_state(.PRESS)
 
           win._maximized = false
         } 
@@ -240,7 +244,7 @@ process_input :: proc(
             i32(win.x + win.width) * i32(scr_scale),
             i32(win.y + win.height) * i32(scr_scale)
             )
-          cursor.set_state(.RESIZE)
+          set_gui_cursor_state(.RESIZE)
 
           win._act_state = .RESIZE
           win._maximized = false
@@ -351,12 +355,12 @@ process_input :: proc(
       if mouse_pos.y <= item.y + math.trunc(item.height / 2)
       {
         scroll_text_item(txt_item, .PREV)
-        cursor.set_state(.SCROLL_UP)
+        set_gui_cursor_state(.SCROLL_UP)
       }
       else
       {
         scroll_text_item(txt_item, .NEXT)
-        cursor.set_state(.SCROLL_DOWN)
+        set_gui_cursor_state(.SCROLL_DOWN)
       }
     }
 
@@ -367,6 +371,12 @@ process_input :: proc(
   {
     move_window_index_to_index(uint(new_top_index), 0)
   }
+}
+
+get_item_pressed :: #force_inline proc() -> ^Item
+{
+  defer st.item_pressed = nil
+  return st.item_pressed
 }
 
 draw_window_list :: proc()
@@ -382,14 +392,11 @@ draw_window_list :: proc()
   }
 }
 
-get_button_down_id :: #force_inline proc() -> int
-{
-  defer st.button_pressed_id = -1
-  return st.button_pressed_id
-}
-
 init :: proc(
   font         : rl.Font,
+
+  cur_txr_path : cstring,
+  cur_offsets  : []rl.Vector2,
 
   wlist        : []^Window      = {},
 
@@ -404,7 +411,8 @@ init :: proc(
 
   frame_delay  :                = 1,
   scroll_delay :                = 1,
-) {
+) -> bool
+{
   cfg.font        = font
 
   cfg.pad         = pad
@@ -419,13 +427,35 @@ init :: proc(
   cfg.frame_delay   = (frame_delay < 0) ? 1 : frame_delay
   cfg.scroll_delay  = (scroll_delay < 0) ? 1 : scroll_delay
 
-  reserve(&st.wlist, len(wlist))
+  err := reserve(&st.wlist, len(wlist))
+  if err != .None
+  {
+    log.errorf("Allocation error: '%v'", err)
+    return false
+  }
+
   for win in wlist
   {
-    add_window(win)
+    if !add_window(win)
+    {
+      return false
+    }
   }
 
   cfg.header_height = f32(cfg.font.baseSize) + math.trunc(cfg.pad / 2)
+
+  if len(cur_offsets) != int(CursorState.COUNT)
+  {
+    log.error("Cursor offset array has an invalid size")
+    return false
+  }
+  if !cur.add_field(CURSOR_FIELD_ID, cur_txr_path, cur_offsets)
+  {
+    log.error("Could not add cursor field")
+    return false
+  }
+
+  return true
 }
 
 fini :: proc()
