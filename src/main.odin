@@ -220,8 +220,7 @@ main :: proc()
     input := inp.get_input_state(SCR_SCALE)
     gui.process_input(input, NAT_SCR_W, NAT_SCR_H, SCR_SCALE)
 
-    if gui.can_window_capure_input(win1._id, input.mouse_pos) &&
-       dgn.process_input(input, win1._id, fp_item.rec, SCR_SCALE)
+    if dgn.process_input(input, win1._id, fp_item.rec, SCR_SCALE)
     {
       dgn.update_first_person_rtxr(first_person_rtxr)
       dgn.update_minimap_rtxr(minimap_rtxr, 5)

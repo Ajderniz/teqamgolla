@@ -104,9 +104,26 @@ process_input :: proc(
     return false
   }
 
-  potential_move: PlayerMovement = nil
-  if common.is_v2_within_rec(input.mouse_pos, rtxr_rec)
+  potential_move : PlayerMovement = nil
+  move           : PlayerMovement = nil
+
+  set_potential_move:
+  if gui.can_window_capure_input(win_id, input.mouse_pos) &&
+     common.is_v2_within_rec(input.mouse_pos, rtxr_rec)
   {
+    if input.mouse_wheel_move != 0
+    {
+      if input.mouse_wheel_move < 0
+      {
+        move = .DOWN
+      }
+      else
+      {
+        move = .UP
+      }
+      break set_potential_move
+    }
+
     rel_mpos: rl.Vector2 = { 
       input.mouse_pos.x - rtxr_rec.x,
       input.mouse_pos.y - rtxr_rec.y
@@ -155,25 +172,11 @@ process_input :: proc(
     }
   }
   
-  move: PlayerMovement
   set_move:
   {
     if potential_move != nil && .LEFT == input.mouse_button_pressed
     {
       move = potential_move
-      break set_move
-    }
-
-    if input.mouse_wheel_move != 0
-    {
-      if input.mouse_wheel_move < 0
-      {
-        move = .DOWN
-      }
-      else
-      {
-        move = .UP
-      }
       break set_move
     }
 
