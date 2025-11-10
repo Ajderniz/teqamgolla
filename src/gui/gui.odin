@@ -287,6 +287,10 @@ process_input :: proc(
 
       if input.mouse_wheel_move != 0
       {
+        if nil == item
+        {
+          break windows
+        }
         #partial switch &form in item.form
         {
         case TextItem:
