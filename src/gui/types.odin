@@ -73,8 +73,8 @@ Item :: struct {
 }
 
 TextItem :: struct {
+  _buffer      : [dynamic]string,
   txt         : string,
-  buffer      : [dynamic]string,
   glyph_size  : rl.Vector2,
   offset      : uint,
   scroll_type : enum { VERTICAL, PAGED }

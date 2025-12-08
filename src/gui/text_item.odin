@@ -72,9 +72,9 @@ update_text_item_buffer :: proc(
     }
   }
 
-  if txti.buffer != nil
+  if txti._buffer != nil
   {
-    clear(&txti.buffer)
+    clear(&txti._buffer)
   }
 
   start := 0
@@ -93,7 +93,7 @@ update_text_item_buffer :: proc(
     {
       end = str.rune_count(txti.txt)
       line, ok = str.substring(txti.txt, start, end)
-      append(&txti.buffer, line)
+      append(&txti._buffer, line)
       break
     }
 
@@ -123,7 +123,7 @@ update_text_item_buffer :: proc(
     }
     if 0 < len(line)
     {
-      append(&txti.buffer, line)
+      append(&txti._buffer, line)
     }
     start = (has_spaces) ? (end + 1) : end
   }
@@ -136,7 +136,7 @@ scroll_text_item :: proc(txti: ^TextItem, dir: enum{PREV, NEXT})
   {
     if .NEXT == dir
     {
-      limit := len(txti.buffer) - int(txti.glyph_size.y)
+      limit := len(txti._buffer) - int(txti.glyph_size.y)
       limit =  (limit < 0) ? 0 : limit
       txti.offset += (txti.offset < uint(limit)) ? 1 : 0
     }
@@ -150,14 +150,14 @@ scroll_text_item :: proc(txti: ^TextItem, dir: enum{PREV, NEXT})
     if .NEXT == dir
     {
       new_offset := txti.offset + uint(txti.glyph_size.y)
-      new_offset -= (new_offset < uint(len(txti.buffer))) ? 1 : 0
+      new_offset -= (new_offset < uint(len(txti._buffer))) ? 1 : 0
       new_offset -= (0 < new_offset)                      ? 1 : 0
-      txti.offset =(uint(len(txti.buffer)-1)<=new_offset)?txti.offset:new_offset
+      txti.offset =(uint(len(txti._buffer)-1)<=new_offset)?txti.offset:new_offset
     }
     else
     {
       new_offset := int(txti.offset) - (int(txti.glyph_size.y))
-      new_offset += (new_offset < len(txti.buffer)) ? 1 : 0
+      new_offset += (new_offset < len(txti._buffer)) ? 1 : 0
       new_offset += (0 < new_offset)                ? 1 : 0
       txti.offset = (new_offset < 0) ? 0 : uint(new_offset)
     }
@@ -177,7 +177,7 @@ draw_text_item :: proc(
   draw_triangles: {
 
     start += (0 < txti.offset)              ? 1 : 0
-    end   -= (end < uint(len(txti.buffer))) ? 1 : 0
+    end   -= (end < uint(len(txti._buffer))) ? 1 : 0
 
     after_text := rec.y + rec.height - f32(font.baseSize)
     if .VERTICAL == txti.scroll_type
@@ -195,7 +195,7 @@ draw_text_item :: proc(
           fg_color
           )
       }
-      if end < uint(len(txti.buffer))
+      if end < uint(len(txti._buffer))
       {
         rl.DrawTriangle(
           {center + half_font_width, after_text},
@@ -218,7 +218,7 @@ draw_text_item :: proc(
           {plus_width, rec.y + f32(font.baseSize)},
           fg_color)
       }
-      if end < uint(len(txti.buffer))
+      if end < uint(len(txti._buffer))
       {
         right_of_text := rec.x + rec.width - font_width
         rl.DrawTriangle(
@@ -229,10 +229,10 @@ draw_text_item :: proc(
       }
     }
   }
-  end = (uint(len(txti.buffer)) < end) ? len(txti.buffer) : end
+  end = (uint(len(txti._buffer)) < end) ? len(txti._buffer) : end
   start = (end < start) ? end : start
 
-  joined_txt := str.join(txti.buffer[start:end], "\n")
+  joined_txt := str.join(txti._buffer[start:end], "\n")
   joined_txt_cstring := str.clone_to_cstring(joined_txt)
   defer delete(joined_txt)
   defer delete(joined_txt_cstring)
@@ -251,5 +251,5 @@ draw_text_item :: proc(
 
 delete_text_item :: #force_inline proc(item: ^TextItem)
 {
-  delete(item.buffer)
+  delete(item._buffer)
 }
