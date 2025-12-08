@@ -135,13 +135,16 @@ move_window_index_to_index :: proc(
 
 add_window :: proc(win: ^Window) -> bool
 {
-  win._id = uint(len(st.wlist))
+  @(static) wid_counter: uint = 0
+
+  win._id = wid_counter
   ok := inject_at(&st.wlist, 0, win)
   if !ok
   {
     log.error("Could not inject window")
     return false
   }
+  wid_counter += 1
   return true
 }
 
