@@ -1,0 +1,12 @@
+GUI
+	- Exit buttons for ALL windows (even bar-less ones)
+	- Better window addressing: Use a string map instead of an array to ID
+			windows; add z-index value and manage render order off of that (requires
+			too much effort and not THAT necessary)
+DGN
+	- Draggable items
+	- Interactivity
+	- More block shapes (or trickery to make normal blocks look special)
+PUZ
+CHT
+ADV
