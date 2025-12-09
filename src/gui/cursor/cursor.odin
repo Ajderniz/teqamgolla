@@ -32,13 +32,6 @@ FieldConf :: struct {
 
 init :: proc(txr_path: cstring, offsets: []rl.Vector2) -> bool
 {
-  /*
-  cfg.offsets[.RESIZE]      = {-16, -16}
-  cfg.offsets[.SCROLL_UP]   = { -4, -10}
-  cfg.offsets[.SCROLL_DOWN] = { -4,  -4}
-  cfg.offsets[.PAGE_PREV]   = { -8,  -8}
-  cfg.offsets[.PAGE_NEXT]   = { -8,  -8}
-  */
   if len(offsets) != int(CursorState.COUNT)
   {
     log.error("Invalid offset array size")
@@ -50,6 +43,7 @@ init :: proc(txr_path: cstring, offsets: []rl.Vector2) -> bool
     return false
   }
   rl.HideCursor()
+  set_base_state(.DEFAULT)
   return true
 }
 

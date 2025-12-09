@@ -417,19 +417,19 @@ init :: proc(
   scroll_delay :                = 1,
 ) -> bool
 {
-  cfg.font        = font
+  cfg.font         = font
 
-  cfg.pad         = pad
-  cfg.fg_color      = fg_color
-  cfg.bg            = bg
+  cfg.pad          = pad
+  cfg.fg_color     = fg_color
+  cfg.bg           = bg
 
-  cfg.win_shadow    = win_shadow
-  cfg.border        = border
-  cfg.line_thick    = line_thick
-  cfg.base_unit     = base_unit
+  cfg.win_shadow   = win_shadow
+  cfg.border       = border
+  cfg.line_thick   = line_thick
+  cfg.base_unit    = base_unit
 
-  cfg.frame_delay   = (frame_delay < 0) ? 1 : frame_delay
-  cfg.scroll_delay  = (scroll_delay < 0) ? 1 : scroll_delay
+  cfg.frame_delay  = (frame_delay < 0) ? 1 : frame_delay
+  cfg.scroll_delay = (scroll_delay < 0) ? 1 : scroll_delay
 
   err := reserve(&st.wlist, len(wlist))
   if err != .None
