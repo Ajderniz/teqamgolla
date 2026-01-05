@@ -1,0 +1,26 @@
+{
+	"start": {
+		"txt": "This is the first message in this chat.",
+		"next": [
+			{ "txt": "First option", "next": "firstopt" },
+			{ "txt": "Second option", "next": "secondopt" },
+			{ "txt": "Third option", "next": "thirdopt" },
+		]
+	},
+	"firstopt": {
+		"txt": "This is the response to the first option.",
+		"next": "then"
+	},
+	"secondopt": {
+		"txt": "This is the response to the second option.",
+		"next": "then"
+	},
+	"thirdopt": {
+		"txt": "This is the response to the third option.",
+		"next": "then"
+	},
+	"then": {
+		"txt": "And now we go back to the start.",
+		"next": "start"
+	}
+}
