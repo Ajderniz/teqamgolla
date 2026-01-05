@@ -1,8 +1,13 @@
+GENERAL
+	- start using arenas wherever possible
+
 GUI
 	- Exit buttons for ALL windows (even bar-less ones)
 	- Better window addressing: Use a string map instead of an array to ID
 			windows; add z-index value and manage render order off of that (requires
 			too much effort and not THAT necessary)
+	- Create an abstract proc that creates windows without having to declare the
+			whole-ass struct locally
 DGN
 	- Draggable items
 	- Interactivity
