@@ -10,14 +10,13 @@ package teqamgolla
 
 import      "core:log"
 import      "core:mem"
-import      "core:math"
 import      "core:os"
 import path "core:path/filepath"
 import str  "core:strings"
 
 import rl   "vendor:raylib"
 
-import dgn  "dungeon"
+import cht  "chat"
 import      "gui"
 import cur  "gui/cursor"
 import inp  "input"
@@ -78,11 +77,6 @@ main :: proc()
   rl.SetTargetFPS(FPS)
 
   rtxr := rl.LoadRenderTexture(NAT_SCR_W, NAT_SCR_H)
-  first_person_rtxr := rl.LoadRenderTexture(
-    i32(math.trunc(f32(NAT_SCR_H) * .75)),
-    i32(math.trunc(f32(NAT_SCR_H) * .75))
-    )
-  minimap_rtxr := rl.LoadRenderTexture(100, 100)
 
   res_path: string
   res_path_cstring: cstring
@@ -116,38 +110,17 @@ main :: proc()
     rl.UnloadCodepoints(codepoints)
   }
 
-  fp_item := gui.Item {
-    form = gui.TextureItem {
-      texture = first_person_rtxr.texture,
-      options = { .IS_FRAMEBUFFER, .CAPTURE_INPUT }
-    }
+  txti := gui.Item {
+    form = gui.TextItem {
+      txt = "Hola, amigos de yutub el dia de oy les ensenare a como descargar gta san andres full gratis para windows 7, comensemos",
+    },
   }
   win1 := gui.Window {
     draggable = true,
     item = &gui.Item { 
-      non_resizable = {true,true},
       form = gui.BoxItem {
-        header = "FP",
-        content = {
-          &fp_item,
-        }
-      }
-    }
-  }
-  win2 := gui.Window {
-    draggable = true,
-    item = &gui.Item { 
-      non_resizable = {true,true},
-      form = gui.BoxItem {
-        header = "MM",
-        content = {
-          &gui.Item {
-            form = gui.TextureItem {
-              texture = minimap_rtxr.texture,
-              options = { .IS_FRAMEBUFFER }
-            }
-          }
-        }
+        header = "BOX",
+        content = {&txti}
       }
     }
   }
@@ -156,12 +129,17 @@ main :: proc()
   res_path_cstring = str.clone_to_cstring(res_path)
   delete(res_path)
   ok := gui.init(
-    font, 
-    res_path_cstring,
-    { {-16,-16}, {-4,-10}, {-4,-4}, cur.CENTER_CURSOR, cur.CENTER_CURSOR },
-    wlist = {&win1, &win2}, 
-    base_unit = 8, 
-    frame_delay = 3
+    font         = font, 
+    cur_txr_path = res_path_cstring,
+    cur_offsets  = { 
+      {-16,-16}, 
+      {-4,-10}, 
+      {-4,-4}, 
+      cur.CENTER_CURSOR, 
+      cur.CENTER_CURSOR },
+    wlist        = {&win1},
+    base_unit    = 8, 
+    frame_delay  = 3
   )
   delete(res_path_cstring)
   if !ok
@@ -170,37 +148,16 @@ main :: proc()
     os.exit(1)
   }
 
-  res_path = path.join({cfg.dir[.IMG], "cursor-dungeon.png"})
-  res_path_cstring = str.clone_to_cstring(res_path)
-  delete(res_path)
-  ok = dgn.init(
-    cfg.dir[.MAPS], 
-    cfg.dir[.IMG],
-    res_path_cstring,
-    { cur.CENTER_CURSOR, cur.CENTER_CURSOR, cur.CENTER_CURSOR,
-      cur.CENTER_CURSOR, cur.CENTER_CURSOR, cur.CENTER_CURSOR }
-  )
-  delete(res_path_cstring)
-  if !ok
-  {
-    log.error("Could not initialize dungeon")
-    os.exit(1)
-  }
-  if !dgn.load_block_map("test.json")
-  {
-    log.error("Could not load map")
-    os.exit(1)
-    }
+  log.debug("INIT COMPLETE")
 
   defer
   {
     rl.UnloadRenderTexture(rtxr)
-    rl.UnloadRenderTexture(first_person_rtxr)
-    rl.UnloadRenderTexture(minimap_rtxr)
 
     cur.fini()
     gui.fini()
-    dgn.fini()
+
+    gui.delete_text_item(&txti.form.(gui.TextItem))
 
     rl.CloseWindow()
 
@@ -210,9 +167,6 @@ main :: proc()
     }
   }
 
-  dgn.update_first_person_rtxr(first_person_rtxr)
-  dgn.update_minimap_rtxr(minimap_rtxr, 5)
-
   /* ============================= MAIN LOOP ================================ */
 
   for !rl.WindowShouldClose()
@@ -220,14 +174,17 @@ main :: proc()
     input := inp.get_input_state(SCR_SCALE)
     gui.process_input(input, NAT_SCR_W, NAT_SCR_H, SCR_SCALE)
 
-    if dgn.process_input(input, win1._id, fp_item.rec, SCR_SCALE)
-    {
-      dgn.update_first_person_rtxr(first_person_rtxr)
-      dgn.update_minimap_rtxr(minimap_rtxr, 5)
-    }
-
     rl.BeginTextureMode(rtxr)
     {
+      if rl.IsKeyPressed(.P)
+      {
+        gui.change_text_item_txt(
+          &txti.form.(gui.TextItem),
+          "COCK",
+          { txti.width, txti.height },
+          txti.font)
+      }
+
       rl.ClearBackground(rl.DARKBLUE)
       gui.draw_window_list()
       cur.draw(SCR_SCALE)

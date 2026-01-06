@@ -1,5 +1,6 @@
 package gui
 
+import     "core:log"
 import     "core:math"
 import str "core:strings"
 
@@ -252,4 +253,17 @@ draw_text_item :: proc(
 delete_text_item :: #force_inline proc(item: ^TextItem)
 {
   delete(item._buffer)
+}
+
+change_text_item_txt :: proc(
+  item : ^TextItem, 
+  txt  : string,
+  size: rl.Vector2, 
+  p_font: ^rl.Font
+  )
+{
+  font := (p_font != nil) ? p_font : &cfg.font
+  item.txt = txt
+  item.glyph_size = 0
+  update_text_item_buffer(item, size, font^)
 }

@@ -73,7 +73,7 @@ Item :: struct {
 }
 
 TextItem :: struct {
-  _buffer      : [dynamic]string,
+  _buffer     : [dynamic]string,
   txt         : string,
   glyph_size  : rl.Vector2,
   offset      : uint,
