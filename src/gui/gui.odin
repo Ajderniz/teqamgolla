@@ -93,10 +93,6 @@ process_input :: proc(
   }
 
   mouse_pos := input.mouse_pos
-  /*
-  mouse_pos.x = math.trunc(mouse_pos.x / scr_scale)
-  mouse_pos.y = math.trunc(mouse_pos.y / scr_scale)
-  */
   mouse_pos.x = (mouse_pos.x < 0) ? 0 : mouse_pos.x
   mouse_pos.y = (mouse_pos.y < 0) ? 0 : mouse_pos.y
   mouse_pos.x = (scr_width  < mouse_pos.x) ? scr_width  : mouse_pos.x
@@ -135,6 +131,12 @@ process_input :: proc(
         {
           continue windows
         }
+      }
+
+      if .X == input.key_pressed
+      {
+        remove_window(win)
+        return
       }
       
       cur.set_base_state(.HOVER)
