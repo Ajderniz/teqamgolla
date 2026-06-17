@@ -56,9 +56,9 @@ load :: proc(filename: string) -> (ok: bool)
 {
   data: []byte
   {
-    ok: bool
-    chat_path := path.join({cfg.dir, filename})
-    data, ok = os.read_entire_file_from_filename(chat_path)
+    chat_path, aerr := path.join({cfg.dir, filename})
+    err: os.Error
+    data, err = os.read_entire_file(chat_path, context.allocator)
     delete(chat_path)
     if !ok
     {

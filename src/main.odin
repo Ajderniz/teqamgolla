@@ -8,6 +8,7 @@
 
 package teqamgolla
 
+import "base:runtime"
 import      "core:log"
 import      "core:mem"
 import      "core:os"
@@ -68,10 +69,11 @@ main :: proc()
 
   /* ========================== INITIALIZATION ============================== */
 
-  cfg.dir[.RES]   = path.join({ROOT_DIR,      "res"})
-  cfg.dir[.FONTS] = path.join({cfg.dir[.RES], "fonts"})
-  cfg.dir[.IMG]   = path.join({cfg.dir[.RES], "img"})
-  cfg.dir[.MAPS]  = path.join({cfg.dir[.RES], "maps"})
+  err: mem.Allocator_Error
+  cfg.dir[.RES], err   = path.join({ROOT_DIR,      "res"})
+  cfg.dir[.FONTS], err = path.join({cfg.dir[.RES], "fonts"})
+  cfg.dir[.IMG], err   = path.join({cfg.dir[.RES], "img"})
+  cfg.dir[.MAPS], err  = path.join({cfg.dir[.RES], "maps"})
 
   rl.InitWindow(SCR_W, SCR_H, "Teqamgolla")
   rl.SetTargetFPS(FPS)
@@ -81,7 +83,7 @@ main :: proc()
   res_path: string
   res_path_cstring: cstring
 
-  res_path = path.join({cfg.dir[.IMG], "cursor-base.png"})
+  res_path, err = path.join({cfg.dir[.IMG], "cursor-base.png"})
   res_path_cstring = str.clone_to_cstring(res_path)
   delete(res_path)
   {
@@ -101,7 +103,7 @@ main :: proc()
       "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20!\"#$%&'()*+,-./0123456789:;<>=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}~\x7F\xA0¡¿ÁÉÍÑÓÚÜáéíñóúü\x00",
       &codepoint_count)
 
-    res_path = path.join({cfg.dir[.FONTS], "Px437_DOS-V_re_ANK16.ttf"})
+    res_path, err = path.join({cfg.dir[.FONTS], "Px437_DOS-V_re_ANK16.ttf"})
     res_path_cstring = str.clone_to_cstring(res_path)
     delete(res_path)
     font = rl.LoadFontEx(res_path_cstring, 16, codepoints, codepoint_count)
@@ -125,7 +127,7 @@ main :: proc()
     }
   }
 
-  res_path = path.join({cfg.dir[.IMG], "cursor-gui.png"})
+  res_path, err = path.join({cfg.dir[.IMG], "cursor-gui.png"})
   res_path_cstring = str.clone_to_cstring(res_path)
   delete(res_path)
   ok := gui.init(
